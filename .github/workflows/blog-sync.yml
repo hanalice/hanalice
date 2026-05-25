@@ -32,8 +32,8 @@ jobs:
 
       - name: Commit and Push
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "hanalice"
+          git config --global user.email "hanalice@users.noreply.github.com"
           git add README.md assets/mascots/daily.png
           git commit -m "Auto update README and mascot" || exit 0
           git push
