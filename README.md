@@ -13,6 +13,7 @@
 ## ✍️ Latest Stream
 
 <!-- BLOG-POST-LIST:START -->
+- [2026-04-15] [Windows 环境部署 OpenClaw + Ollama 完整指南](./posts/openclaw-deploy-windows.md)
 - [2024-09-19] [Http请求常用方法解释](./posts/http_request.md)
 - [2024-09-19] [Git修改历史提交的作者信息](./posts/git_change_history_commit_authors.md)
 - [2017-11-30] [Git常用命令](./posts/git_help.md)
@@ -29,11 +30,11 @@
 ## 🏷 Categories
 
 <!-- TAG-CLOUD:START -->
-[`#Agent(1)`](./tags/Agent.md) [`#AngularJS(2)`](./tags/AngularJS.md) [`#Automation(1)`](./tags/Automation.md) [`#Container(1)`](./tags/Container.md) [`#DevOps(2)`](./tags/DevOps.md) [`#Docker(1)`](./tags/Docker.md) [`#Git(4)`](./tags/Git.md) [`#Http(2)`](./tags/Http.md) [`#SSH(1)`](./tags/SSH.md) [`#Tutorial(1)`](./tags/Tutorial.md) [`#Vim(1)`](./tags/Vim.md)
+[`#Agent(1)`](./tags/Agent.md) [`#AngularJS(2)`](./tags/AngularJS.md) [`#Automation(1)`](./tags/Automation.md) [`#Container(1)`](./tags/Container.md) [`#DevOps(2)`](./tags/DevOps.md) [`#Docker(1)`](./tags/Docker.md) [`#Git(4)`](./tags/Git.md) [`#Http(2)`](./tags/Http.md) [`#Ollama(1)`](./tags/Ollama.md) [`#OpenClaw(1)`](./tags/OpenClaw.md) [`#SSH(1)`](./tags/SSH.md) [`#Tutorial(1)`](./tags/Tutorial.md) [`#Vim(1)`](./tags/Vim.md) [`#WSL2(1)`](./tags/WSL2.md)
 <!-- TAG-CLOUD:END -->
 
 <p align="right">
   <a href="./posts">All Posts →</a>
 </p>
 
-<!-- STATUS: HEALTHY, LAST_SYNC: 2026-05-25 12:16:35 -->
+<!-- STATUS: HEALTHY, LAST_SYNC: 2026-05-25 13:12:09 -->
