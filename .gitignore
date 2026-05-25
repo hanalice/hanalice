@@ -1,3 +1,4 @@
 .agents/
 .claude/
 CLAUDE.md
+*.pyc

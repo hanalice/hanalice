@@ -1,6 +1,6 @@
 # GitHub Profile Engineering - Local Preview Makefile
 
-.PHONY: sync preview help
+.PHONY: sync preview test help
 
 help:
 	@echo "Usage:"
@@ -9,6 +9,9 @@ help:
 
 sync:
 	python3 scripts/sync.py
+
+test:
+	python3 -m unittest discover -s tests -v
 
 preview: sync
 	@echo "-----------------------------------------------------------"
