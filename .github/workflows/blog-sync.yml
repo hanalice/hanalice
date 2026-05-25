@@ -1,0 +1,35 @@
+name: Blog Sync & Mascot Rotation
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 每日凌晨运行
+  push:
+    branches:
+      - main
+    paths:
+      - 'posts/**'
+      - 'assets/mascots/**'
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Run Sync Script
+        run: python scripts/sync.py
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md assets/mascots/daily.gif
+          git commit -m "Auto update README and mascot" || exit 0
+          git push

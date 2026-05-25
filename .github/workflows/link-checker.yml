@@ -1,0 +1,20 @@
+name: Monthly Link Checker
+
+on:
+  schedule:
+    - cron: '0 0 1 * *' # 每月1号运行
+  workflow_dispatch:
+
+jobs:
+  linkChecker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Link Checker
+        uses: lycheeverse/lychee-action@v1.5.4
+        with:
+          args: --verbose --no-progress './**/*.md'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

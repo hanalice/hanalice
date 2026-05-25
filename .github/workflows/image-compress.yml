@@ -1,0 +1,19 @@
+name: Image Compression
+
+on:
+  push:
+    paths:
+      - 'assets/**'
+
+jobs:
+  compress:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Compress Images
+        uses: calibreapp/image-actions@main
+        with:
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          compressOnly: false # 自动提交压缩后的图片
