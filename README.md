@@ -14,8 +14,8 @@
 
 <!-- BLOG-POST-LIST:START -->
 - [2026-04-15] [Windows 环境部署 OpenClaw + Ollama 完整指南](./posts/openclaw-deploy-windows.md)
-- [2024-09-19] [Git修改历史提交的作者信息](./posts/git_change_history_commit_authors.md)
 - [2024-09-19] [Http请求常用方法解释](./posts/http_request.md)
+- [2024-09-19] [Git修改历史提交的作者信息](./posts/git_change_history_commit_authors.md)
 - [2017-11-30] [Git常用命令](./posts/git_help.md)
 - [2017-09-22] [AngularJS中$http服务的简单用法](./posts/angular_http.md)
 - [2017-08-15] [Vim命令合集](./posts/vim_help.md)
@@ -37,4 +37,4 @@
   <a href="./posts">All Posts →</a>
 </p>
 
-<!-- STATUS: HEALTHY, LAST_SYNC: 2026-05-28 00:48:50 -->
+<!-- STATUS: HEALTHY, LAST_SYNC: 2026-05-29 00:55:52 -->
