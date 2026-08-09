@@ -2,7 +2,7 @@ name: Blog Sync & Mascot Rotation
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每日凌晨运行
+    - cron: '0 0 1 * *' # 每月1日凌晨运行
   push:
     branches:
       - main
