@@ -13,6 +13,7 @@
 ## ✍️ Latest Stream
 
 <!-- BLOG-POST-LIST:START -->
+- [2026-08-08] [pnpm 安装 rspack 原生 binding 缺失导致 build 失败](./posts/rspack-native-binding-fix.md)
 - [2026-04-15] [Windows 环境部署 OpenClaw + Ollama 完整指南](./posts/openclaw-deploy-windows.md)
 - [2024-09-19] [Git修改历史提交的作者信息](./posts/git_change_history_commit_authors.md)
 - [2024-09-19] [Http请求常用方法解释](./posts/http_request.md)
@@ -22,7 +23,6 @@
 - [2017-08-15] [AngularJS的工具类集合](./posts/angular_utils.md)
 - [2017-08-07] [使用ssh-agent 管理多个ssh key](./posts/ssh-agent.md)
 - [2017-07-18] [Dockerfile 快速上手：构建并运行你的第一个容器](./posts/docker_quickstart.md)
-- [2017-07-01] [极简主义艺术：基于 GitHub Actions 的静态个人门户自动化体系](./posts/github_actions_automation.md)
 <!-- BLOG-POST-LIST:END -->
 
 ---
@@ -30,11 +30,12 @@
 ## 🏷 Categories
 
 <!-- TAG-CLOUD:START -->
-[`#Agent(1)`](./tags/Agent.md) [`#AngularJS(2)`](./tags/AngularJS.md) [`#Automation(1)`](./tags/Automation.md) [`#Container(1)`](./tags/Container.md) [`#DevOps(2)`](./tags/DevOps.md) [`#Docker(1)`](./tags/Docker.md) [`#Git(4)`](./tags/Git.md) [`#Http(2)`](./tags/Http.md) [`#Ollama(1)`](./tags/Ollama.md) [`#OpenClaw(1)`](./tags/OpenClaw.md) [`#SSH(1)`](./tags/SSH.md) [`#Tutorial(1)`](./tags/Tutorial.md) [`#Vim(1)`](./tags/Vim.md) [`#WSL2(1)`](./tags/WSL2.md)
+[`#Agent(1)`](./tags/Agent.md) [`#AngularJS(2)`](./tags/AngularJS.md) [`#Automation(1)`](./tags/Automation.md) [`#Container(1)`](./tags/Container.md) [`#DevOps(2)`](./tags/DevOps.md) [`#Docker(1)`](./tags/Docker.md) [`#Git(4)`](./tags/Git.md) [`#Http(2)`](./tags/Http.md) [`#Ollama(1)`](./tags/Ollama.md) [`#OpenClaw(1)`](./tags/OpenClaw.md) [`#SSH(1)`](./tags/SSH.md) [`#Tutorial(1)`](./tags/Tutorial.md) [`#Vim(1)`](./tags/Vim.md) [`#WSL(1)`](./tags/WSL.md) [`#WSL2(1)`](./tags/WSL2.md) [`#native-binding(1)`](./tags/native-binding.md) [`#optional-dependencies(1)`](./tags/optional-dependencies.md) [`#pnpm(1)`](./tags/pnpm.md) [`#rspack(1)`](./tags/rspack.md)
 <!-- TAG-CLOUD:END -->
 
 <p align="right">
   <a href="./posts">All Posts →</a>
 </p>
 
-<!-- STATUS: HEALTHY, LAST_SYNC: 2026-08-09 01:42:44 -->
+<!-- STATUS: HEALTHY, LAST_SYNC: 2026-08-09 22:49:31 -->
+
