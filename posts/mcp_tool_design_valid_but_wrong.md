@@ -60,18 +60,113 @@ AWS 对 MCP 工具失效的归纳很干脆：**Confusion + Bloat**。协议本�
 
 MCP Tools 规范里，工具靠 `name` + `description` + `inputSchema`（以及可选的 `outputSchema` / `annotations`）被模型发现和调用。对 Agent 而言，**description 不是注释，而是路由契约**：模型几乎只靠它决定「调谁」。两份 description 都能回答「发送这张发票」，就是你发到生产上的 routing bug。
 
-### Protocol Error vs `isError`
+### Protocol Error vs Tool Execution Error
 
-规范区分两层错误，设计时必须分开用：
+Agent 调工具时，失败对应规范里的两种 **error reporting mechanism**：
 
-1. **Protocol Errors**（JSON-RPC `error`）：未知工具、参数不符合 schema、服务端协议级故障。客户端 / Host 层处理。
-2. **Tool Execution Errors**（结果里 `isError: true`）：业务失败、上游 API 限流、前置条件不满足。内容会回到模型上下文，**应当写成可行动指令**（例如「请先 finalize 发票再开 credit note」），而不是裸 `500`。
+1. **电话没打通** → **Protocol Error**（协议错误：JSON-RPC 响应里的 `error`）
+2. **电话打通了，但事没办成** → **Tool Execution Error**（工具执行错误：JSON-RPC `result` 里 `isError: true`）
 
-把业务前置条件失败塞进 JSON-RPC `-32602`，模型往往得不到可恢复信号；把「参数类型错了」只写成散文 `isError`，又浪费了 schema 本可在协议层挡住的机会。
+模型主要吃 Tool Execution Error 里的文字；Protocol Error 常常停在 Host，模型只感觉「调用失败了」，不一定看得到你写的业务文案。
+
+#### 调用实际长什么样
+
+简化成两次往返：
+
+1. Host（Cursor 等）按 JSON-RPC 把 `tools/call` 发给 MCP Server
+2. Server 要么：
+   - **拒收这次请求** → 回 JSON-RPC **error**（Protocol Error）
+   - **接受并执行了工具** → 回 **result**；若业务失败，result 里带 `isError: true` + 说明文字
+
+#### Protocol Error：电话没打通
+
+典型原因：未知工具名；参数不符合 schema（该 number 给了 string、缺必填、枚举外的值）；服务端协议级故障。
+
+返回的是 JSON-RPC 错误对象（常见如 `-32602` Invalid params），**不是**「工具跑完后的业务结果」。
+
+例子：schema 规定 `clientLocation` 只能是 `"peninsula" | "canarias" | ...`，模型却传了 `"Canary Islands"`。若 Host/Server 严格校验，会在进业务逻辑之前被协议层打回。模型可能只知道「参数无效」，不一定看到精心写的业务恢复指引。
+
+#### `isError: true`：电话通了，事没办成
+
+工具函数已经执行了，但任务失败，例如：发票还没 finalize；上游 API 限流；库存不足、权限不够。
+
+这时协议含义是：这次 `tools/call` **成功完成了一次工具调用**，但结果标记为错误。这段内容会回到模型上下文，所以应当写成**可行动指令**：
+
+- 差：`"Error 500"` / `"failed"`
+- 好：`"发票 INV-1024 尚未 finalize，请先调用 finalize_invoice，再开 credit note"`
+
+#### 为什么必须分开用（别混用）
+
+**别把业务前置失败塞进 Protocol Error（例如硬塞 `-32602`）**
+
+「还没 finalize」不是「参数类型错了」，是世界状态不对。塞进协议错误 → Host 当非法请求处理，模型往往拿不到「请先 finalize」这种恢复路径。正确：参数合法、工具已执行 → 用 `isError: true` + 明确下一步。
+
+**别把「参数类型明显错了」只写成散文式 `isError`**
+
+`"age": "十八"` 这种本该 schema 在门口拦住。若放进工具里再返回「age 必须是数字」：浪费了 schema 自动约束，多跑一轮工具，还可能让模型继续用同义写法猜。正确：能用 enum / number / required 在协议层挡的，就挡在协议层。
+
+一句话：
+
+> **形状不对 → Protocol Error（schema）**  
+> **形状对、但事办不成 → isError（给模型看的业务反馈）**
+
+#### 同一场景串起来
+
+目标：给客户开 credit note。
+
+1. 模型调用 `create_credit_note({ invoiceId: "INV-1" })`，参数类型都对。
+2. Server 查库：发票还是 draft。
+3. **应返回** result + `isError: true`：`"INV-1 仍是 draft，请先 finalize_invoice(\"INV-1\")"`。
+4. 模型下轮去调 `finalize_invoice`。
+
+若第 3 步改成抛 JSON-RPC `-32602`：Host 可能只报 Invalid params，模型不知道要先 finalize。  
+反过来：模型传 `invoiceId: 12345`（该是 string）→ 应用 Protocol Error / schema 拒绝，不必进业务代码。
+
+这和全文主题的关系：「合法但错误」多半指过了 schema（协议层绿灯），业务上却选错工具 / 填错语义 / 顺序不对。那种失败要靠更好的 description / enum 减少走进死胡同，以及走进去之后用清晰的 `isError` 文案把模型拉回来——而不是全部打成 Protocol Error，也不是全部变成一句糊里糊涂的 500。
 
 ### Annotations 是提示，不是安全边界
 
 `readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint` 让 Host 可以对读操作自动放行、对破坏性写操作要求人工确认。规范明确：**clients MUST consider tool annotations to be untrusted unless they come from trusted servers**。真实鉴权、对象级授权、幂等与速率限制必须落在 Server 侧；annotation 只能缩小 blast radius，不能替代 enforcement。
+
+它们定义在 **Tool** 对象的可选字段 `annotations`（类型 **ToolAnnotations**）：`tools/list` 的返回值里，与 `name` / `description` / `inputSchema` 同级。见 [Tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools) 与 [schema：`Tool` / `ToolAnnotations`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations)。`tools/call` 的请求/结果里没有这份结构。
+
+```json
+{
+  "name": "get_invoice",
+  "description": "Fetch an invoice by id. Read-only.",
+  "inputSchema": {
+    "type": "object",
+    "properties": { "invoiceId": { "type": "string" } },
+    "required": ["invoiceId"]
+  },
+  "annotations": {
+    "title": "Get invoice",
+    "readOnlyHint": true,
+    "openWorldHint": false
+  }
+}
+```
+
+```json
+{
+  "name": "void_invoice",
+  "description": "Permanently void an invoice. Not reversible.",
+  "inputSchema": {
+    "type": "object",
+    "properties": { "invoiceId": { "type": "string" } },
+    "required": ["invoiceId"]
+  },
+  "annotations": {
+    "title": "Void invoice",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}
+```
+
+省略某 hint 时走规范默认值（`readOnlyHint` 默认 `false`，`destructiveHint` 默认 `true`）。缺字段不等于「安全」。
 
 ---
 
@@ -154,40 +249,51 @@ server.tool(
 );
 ```
 
-V3 风格的搜索工具还会把内部列名改成模型能懂的名字，并用 enum / default 去掉猜测：
+相对上面的 GOOD，**V3** 要做的是：把 REST/DB 列名改成领域名、用 enum / default 去掉猜测、冷门字段拆到详情工具。仍用 `update_invoice`：
 
 ```typescript
-// V3: 领域命名 + Literal/enum + defaults（示意）
+// V1 Passthrough：API 原样，模型只能猜
 {
-  subject: z
-    .enum(["Math", "Science", "Literacy/ELA", "Social Studies"])
-    .describe("Was: discipline"),
-  resource_class: z
-    .enum(["Student Resource", "Teacher Support"])
-    .default("Student Resource"),
-  language: z.enum(["en", "es"]).default("en"),
-  // 冷门字段删除；详情走 get_resource_detail
+  invoice_id: z.string(),
+  region: z.string().optional(),       // "Canary Islands" | "canarias" | "ES-CN"
+  op_type: z.string().optional(),
+  notes_internal: z.string().optional(),
+  pdf_template_id: z.string().optional(),
+}
+
+// V3 Schema + defaults：非法值进不了协议层
+{
+  invoiceId: z.string().uuid(),        // 原 invoice_id
+  clientLocation: z
+    .enum(["peninsula", "canarias", "ceuta_melilla", "eu", "world"])
+    .default("peninsula")
+    .describe("Was: region. Fiscal zone for IVA vs IGIC vs exempt."),
+  operationType: z.enum(["service", "goods"]).default("service"), // 原 op_type
+  // 去掉 notes_internal / pdf_template_id；详情走 get_invoice
 }
 ```
 
-V4 则把「合法值大表」挪出 always-loaded 定义：
+`send_invoice` 同样：只留 `invoiceId` + `idempotencyKey`，发信相关的冷门选项不进这个工具。
+
+**V4** 则把「合法值大表」挪出 always-loaded 定义，需要时再拉：
 
 ```typescript
-// V4: 搜索工具只留短 hint；taxonomy 按需加载
+// V4: 更新工具只留短 hint；taxonomy 按需加载
 server.tool(
-  "search_content",
-  "Search K-12 resources. For ambiguous filters, call get_taxonomy first.",
+  "update_invoice",
+  "Update draft invoice fields only. Does NOT email or finalize. For valid fiscal zones, call get_fiscal_taxonomy first.",
   {
-    subject: z.string().optional().describe("e.g. Math, Science, Literacy"),
-    keyword: z.string().optional(),
+    invoiceId: z.string().uuid(),
+    clientLocation: z.string().optional().describe("e.g. peninsula, canarias"),
+    operationType: z.enum(["service", "goods"]).optional(),
   },
-  searchHandler,
+  updateHandler,
 );
 
 server.tool(
-  "get_taxonomy",
-  "Return valid values and NL→canonical mappings for the requested fields only.",
-  { fields: z.array(z.enum(["subject", "grade", "media_type", "resource_class"])) },
+  "get_fiscal_taxonomy",
+  "Return valid values and NL→canonical mappings for the requested invoice fields only.",
+  { fields: z.array(z.enum(["clientLocation", "operationType"])) },
   taxonomyHandler,
 );
 ```
@@ -245,5 +351,5 @@ server.tool(
 
 1. Daniel Wells, Raian Osman — [MCP tool design: Practical approaches and tradeoffs](https://aws.amazon.com/blogs/machine-learning/mcp-tool-design-practical-approaches-and-tradeoffs/) (AWS Machine Learning Blog, 2026-07-09). Confusion / Bloat 框架与 V1–V6 对照。
 2. berthelius (Frihet) — [Designing MCP tools an agent won't misuse](https://dev.to/frihet/designing-mcp-tools-an-agent-wont-misuse-1ah1) (DEV, 2025-08-09). Well-formed wrong 与四类 misuse、enum 约束、annotations、typed errors。
-3. Model Context Protocol — [Tools (specification 2025-06-18)](https://modelcontextprotocol.io/specification/2025-06-18/server/tools). `tools/list` / `tools/call`、protocol error vs `isError`、annotations 不可单独作为安全依据。
+3. Model Context Protocol — [Tools (specification 2025-06-18)](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)；[JSON schema：`Tool` / `ToolAnnotations`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations). `tools/list` / `tools/call`、protocol error vs `isError`、annotations 不可单独作为安全依据。
 4. arXiv:2602.14878 — [Model Context Protocol (MCP) Tool Descriptions Are Smelly!](https://arxiv.org/html/2602.14878v1). 856 工具 / 103 Server；约 97.1% 描述含至少一种 smell；增强描述的收益与步数 / 回归代价。

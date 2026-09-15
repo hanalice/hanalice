@@ -104,7 +104,15 @@
 
 ---
 
-## 8. 安全与未来扩展 (Security & Scalability)
+## 8. 博文与技术说明的用语 (Terminology)
+
+*   **共识术语优先：** `posts/` 与 `docs/` 中的技术概念，使用规范、RFC、官方文档中的专名及其通行译名。
+*   **比喻不作术语：** 可用生活比喻帮助理解，但正文标题、定义句、对照表必须用共识名称，禁止用自造隐喻词顶替（例如 MCP 失败机制用 Protocol Error / Tool Execution Error，不用「信封」）。
+*   **拿不准先查：** 写入前核对规范原文怎么称呼；中英并列时专名在前、通行译名在后。
+
+---
+
+## 9. 安全与未来扩展 (Security & Scalability)
 *   **最小权限原则 (Least Privilege)：** 所有 GitHub Actions 文件必须显式声明所需的最小 `permissions`（如只读、只写 issue 等），严禁授予默认全局权限。
 *   **Secrets：** 所有未来涉及 API 的 Token 必须存放在 GitHub Secrets 中。
 *   **双站并行（预留）：** 结构上支持未来一键部署至 GitHub Pages 变成动态 Web App。
