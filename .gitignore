@@ -1,4 +1,5 @@
 .agents/
 .claude/
+.cursor/
 CLAUDE.md
 *.pyc
