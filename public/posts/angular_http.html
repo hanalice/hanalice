@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>AngularJS中$http服务的简单用法</h1>
-<p class="post-meta"><time datetime="2017-09-22">2017-09-22</time> · <ul class="tags"><li>#AngularJS</li><li>#Http</li></ul></p>
+<h1 class="page-title">AngularJS中$http服务的简单用法</h1>
+<div class="post-meta"><time datetime="2017-09-22">2017-09-22</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/AngularJS.html" data-tag="AngularJS">#AngularJS</a><a class="tag-chip" href="/hanalice/tags/Http.html" data-tag="Http">#Http</a></div></div>
+<div class="prose">
 <p>我们可以使用内置的$http服务直接同外部进行通信。$http服务只是简单的封装了浏览器原生的XMLHttpRequest对象。</p>
 <h3>链式调用</h3>
 <p>$http服务是只能接受一个参数的函数，这个参数是一个对象，包含了用来生成HTTP请求的
@@ -93,11 +101,13 @@ resp.headers('X-Auth-ID');
 </code></pre>
 <p>第一次发送请求时，$http服务会向/api/users.json发送一个GET请求。第二次发送同一个GET请求时，$http服务会从缓存中取回请求的结果，而不会真的发送一个HTTP GET请求。
 在这个例子里，由于设置了启用缓存，AngularJS默认会使用$cacheFactory,这个服务是AngularJS在启动时自动创建的。如果想要对AngularJS使用的缓存进行更多的自定义控制，可以向请求传入一个自定义的缓存实例代替true。</p>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

@@ -5,6 +5,7 @@ import re
 import shutil
 import sys
 from datetime import datetime
+from urllib.parse import quote
 from xml.sax.saxutils import escape as xml_escape
 
 POSTS_DIR = './posts'
@@ -262,135 +263,98 @@ def _rewrite_relative_urls(fragment):
     )
 
 
-def _page_shell(title, description, canonical, body_html, extra_head='', og_type='website'):
+def _tag_filename(tag):
+    """Filesystem name for a tag page; matches tags/<Tag>.md naming."""
+    return f'{tag}.html'
+
+
+def _tag_href(tag):
+    """Root-relative href for a tag page (URL-encode the tag segment)."""
+    return _href(f'tags/{quote(tag, safe="-_.")}.html')
+
+
+def _nav_html(active=None):
+    home = html.escape(_href(''))
+    posts = html.escape(_href(''))
+    tags = html.escape(_href('tags/'))
+    github = 'https://github.com/hanalice/hanalice'
+
+    def cls(name):
+        return ' class="active"' if active == name else ''
+
+    return (
+        '<header class="site-header">\n'
+        '  <nav class="site-nav" aria-label="Primary">\n'
+        f'    <a class="site-title" href="{home}">{html.escape(SITE_TITLE)}</a>\n'
+        '    <ul class="nav-links">\n'
+        f'      <li><a href="{posts}"{cls("posts")}>Posts</a></li>\n'
+        f'      <li><a href="{tags}"{cls("tags")}>Tags</a></li>\n'
+        f'      <li><a href="{github}" rel="noopener noreferrer" target="_blank">GitHub</a></li>\n'
+        '    </ul>\n'
+        '  </nav>\n'
+        '</header>'
+    )
+
+
+def _page_shell(
+    title,
+    description,
+    canonical,
+    body_html,
+    extra_head='',
+    og_type='website',
+    active=None,
+    extra_body_end='',
+):
     esc_title = html.escape(title)
     esc_desc = html.escape(description)
     esc_canon = html.escape(canonical)
     og_type = html.escape(og_type)
     css_href = html.escape(_href('assets/site.css'))
     home_href = html.escape(_href(''))
-    return f'''<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{esc_title}</title>
-<meta name="description" content="{esc_desc}">
-<link rel="canonical" href="{esc_canon}">
-<meta property="og:title" content="{esc_title}">
-<meta property="og:description" content="{esc_desc}">
-<meta property="og:url" content="{esc_canon}">
-<meta property="og:type" content="{og_type}">
-<meta property="og:site_name" content="{html.escape(SITE_TITLE)}">
-<link rel="stylesheet" href="{css_href}">
-{extra_head}
-</head>
-<body>
-<header class="site-header">
-  <a class="site-title" href="{home_href}">{html.escape(SITE_TITLE)}</a>
-</header>
-<main class="site-main">
-{body_html}
-</main>
-<footer class="site-footer">
-  <p><a href="{home_href}">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
-</footer>
-</body>
-</html>
-'''
+    tags_href = html.escape(_href('tags/'))
+    parts = [
+        '<!DOCTYPE html>',
+        '<html lang="zh-CN">',
+        '<head>',
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        f'<title>{esc_title}</title>',
+        f'<meta name="description" content="{esc_desc}">',
+        f'<link rel="canonical" href="{esc_canon}">',
+        f'<meta property="og:title" content="{esc_title}">',
+        f'<meta property="og:description" content="{esc_desc}">',
+        f'<meta property="og:url" content="{esc_canon}">',
+        f'<meta property="og:type" content="{og_type}">',
+        f'<meta property="og:site_name" content="{html.escape(SITE_TITLE)}">',
+        f'<link rel="stylesheet" href="{css_href}">',
+        extra_head,
+        '</head>',
+        '<body>',
+        _nav_html(active=active),
+        '<main class="site-main">',
+        body_html,
+        '</main>',
+        '<footer class="site-footer">',
+        f'  <p><a href="{home_href}">Home</a> &middot; <a href="{tags_href}">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>',
+        '</footer>',
+        extra_body_end,
+        '</body>',
+        '</html>',
+        '',
+    ]
+    return '\n'.join(parts)
+
+
+_SITE_CSS = '/* Apple-inspired theme for GitHub Pages */\n:root {\n  --bg: #f5f5f7;\n  --fg: #1d1d1f;\n  --muted: #86868b;\n  --border: rgba(0, 0, 0, 0.08);\n  --link: #0066cc;\n  --link-hover: #0077ed;\n  --code-bg: #e8e8ed;\n  --chip-bg: #e8e8ed;\n  --chip-active: #1d1d1f;\n  --chip-active-fg: #f5f5f7;\n  --card: #ffffff;\n  --max: 980px;\n  --measure: 65ch;\n  --radius: 12px;\n  --radius-sm: 9800px;\n}\n* { box-sizing: border-box; }\nhtml { -webkit-text-size-adjust: 100%; }\nbody {\n  margin: 0;\n  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;\n  font-size: 17px;\n  line-height: 1.47059;\n  letter-spacing: -0.022em;\n  color: var(--fg);\n  background: var(--bg);\n  min-height: 100vh;\n}\na {\n  color: var(--link);\n  text-decoration: none;\n}\na:hover { color: var(--link-hover); text-decoration: underline; }\n.site-header {\n  position: sticky;\n  top: 0;\n  z-index: 50;\n  backdrop-filter: saturate(180%) blur(20px);\n  -webkit-backdrop-filter: saturate(180%) blur(20px);\n  background: rgba(245, 245, 247, 0.72);\n  border-bottom: 1px solid var(--border);\n}\n.site-nav {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 0.85rem 1.5rem;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 1rem;\n}\n.site-title {\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.03em;\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-title:hover { color: var(--fg); text-decoration: none; opacity: 0.8; }\n.nav-links {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  align-items: center;\n  gap: 1.25rem;\n  font-size: 0.9rem;\n}\n.nav-links a {\n  color: var(--muted);\n  text-decoration: none;\n  font-weight: 400;\n}\n.nav-links a:hover,\n.nav-links a.active {\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-main {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 2.5rem 1.5rem 3.5rem;\n}\n.site-footer {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 1.5rem 1.5rem 2.5rem;\n  border-top: 1px solid var(--border);\n  color: var(--muted);\n  font-size: 0.85rem;\n}\n.site-footer a { color: var(--muted); }\n.site-footer a:hover { color: var(--fg); }\n.page-title {\n  margin: 0 0 0.35rem;\n  font-size: clamp(2rem, 4.5vw, 2.75rem);\n  font-weight: 700;\n  letter-spacing: -0.045em;\n  line-height: 1.1;\n}\n.page-sub {\n  margin: 0 0 2rem;\n  color: var(--muted);\n  font-size: 1.05rem;\n}\n.tag-filters {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.5rem;\n  margin: 0 0 1.75rem;\n  padding: 0 0 1.5rem;\n  border-bottom: 1px solid var(--border);\n}\n.tag-chip {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0.35rem 0.85rem;\n  border-radius: var(--radius-sm);\n  border: none;\n  background: var(--chip-bg);\n  color: var(--fg);\n  font: inherit;\n  font-size: 0.8rem;\n  font-weight: 500;\n  letter-spacing: -0.01em;\n  cursor: pointer;\n  text-decoration: none;\n  transition: background 0.15s ease, color 0.15s ease;\n}\na.tag-chip:hover { text-decoration: none; color: var(--fg); background: #dcdce0; }\nbutton.tag-chip:hover { background: #dcdce0; }\n.tag-chip.active,\n.tag-chip[aria-pressed="true"] {\n  background: var(--chip-active);\n  color: var(--chip-active-fg);\n}\n.tag-chip .count {\n  color: inherit;\n  opacity: 0.65;\n  font-variant-numeric: tabular-nums;\n}\n.post-list {\n  list-style: none;\n  padding: 0;\n  margin: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.post-list > li {\n  background: var(--card);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 1.1rem 1.25rem;\n  transition: box-shadow 0.15s ease, border-color 0.15s ease;\n}\n.post-list > li:hover {\n  border-color: rgba(0, 0, 0, 0.12);\n  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);\n}\n.post-list > li.hidden { display: none; }\n.post-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: 0.35rem 0.85rem;\n}\n.post-list .date {\n  color: var(--muted);\n  font-size: 0.85rem;\n  font-variant-numeric: tabular-nums;\n  min-width: 6.5rem;\n}\n.post-list .post-title {\n  flex: 1 1 12rem;\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.02em;\n  color: var(--fg);\n  text-decoration: none;\n}\n.post-list .post-title:hover { color: var(--link); text-decoration: none; }\n.post-list .post-tags {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n  width: 100%;\n  margin-top: 0.55rem;\n}\n.post-list .post-tags .tag-chip {\n  font-size: 0.72rem;\n  padding: 0.22rem 0.65rem;\n}\n.empty-filter {\n  display: none;\n  color: var(--muted);\n  padding: 1.5rem 0;\n}\n.empty-filter.visible { display: block; }\narticle {\n  max-width: var(--measure);\n}\narticle h1.page-title,\narticle > h1 {\n  margin-top: 0;\n  font-size: clamp(1.75rem, 3.5vw, 2.35rem);\n  font-weight: 700;\n  letter-spacing: -0.04em;\n  line-height: 1.15;\n}\n.post-meta {\n  color: var(--muted);\n  font-size: 0.95rem;\n  margin: 0.5rem 0 1.75rem;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 0.5rem 0.75rem;\n}\n.post-meta .tags,\n.tags {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n}\n.tags li { display: inline; }\n.prose {\n  max-width: var(--measure);\n  line-height: 1.65;\n}\n.prose h2, .prose h3 {\n  letter-spacing: -0.03em;\n  margin-top: 2rem;\n}\n.prose p { margin: 0.9rem 0; }\npre, code {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 0.88em;\n}\ncode {\n  background: var(--code-bg);\n  padding: 0.12em 0.4em;\n  border-radius: 6px;\n}\npre {\n  background: var(--code-bg);\n  padding: 1.1rem 1.2rem;\n  overflow-x: auto;\n  border-radius: 10px;\n  border: 1px solid var(--border);\n}\npre code { background: none; padding: 0; }\ntable { border-collapse: collapse; width: 100%; margin: 1rem 0; }\nth, td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; }\nimg { max-width: 100%; height: auto; border-radius: 8px; }\n.back { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }\n.tag-cloud {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.55rem;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n'
 
 
 def _write_site_css():
     css_dir = os.path.join(PUBLIC_DIR, 'assets')
     os.makedirs(css_dir, exist_ok=True)
-    css = '''/* Minimal readable theme for GitHub Pages */
-:root {
-  --bg: #fafafa;
-  --fg: #1a1a1a;
-  --muted: #666;
-  --border: #e5e5e5;
-  --link: #0969da;
-  --code-bg: #f0f0f0;
-  --max: 44rem;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117;
-    --fg: #e6edf3;
-    --muted: #8b949e;
-    --border: #30363d;
-    --link: #58a6ff;
-    --code-bg: #161b22;
-  }
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  line-height: 1.65;
-  color: var(--fg);
-  background: var(--bg);
-}
-.site-header, .site-main, .site-footer {
-  max-width: var(--max);
-  margin: 0 auto;
-  padding: 1rem 1.25rem;
-}
-.site-header {
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-}
-.site-title {
-  font-weight: 700;
-  font-size: 1.15rem;
-  text-decoration: none;
-  color: var(--fg);
-}
-.site-footer {
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-a { color: var(--link); }
-.post-list { list-style: none; padding: 0; margin: 0; }
-.post-list li {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border);
-}
-.post-list .date {
-  display: inline-block;
-  min-width: 6.5rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  margin-right: 0.5rem;
-}
-.post-meta { color: var(--muted); font-size: 0.9rem; margin: 0.25rem 0 1.25rem; }
-.tags { margin: 0; padding: 0; list-style: none; display: inline; }
-.tags li { display: inline; }
-.tags li:not(:last-child)::after { content: ", "; }
-article h1 { margin-top: 0; line-height: 1.3; }
-pre, code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.9em;
-}
-code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 3px; }
-pre {
-  background: var(--code-bg);
-  padding: 1rem;
-  overflow-x: auto;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-}
-pre code { background: none; padding: 0; }
-table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
-img { max-width: 100%; height: auto; }
-.back { margin-top: 2rem; }
-'''
     path = os.path.join(css_dir, 'site.css')
     with open(path, 'w', encoding='utf-8') as f:
-        f.write(css)
+        f.write(_SITE_CSS)
     return path
 
 
@@ -412,26 +376,75 @@ def _copy_assets():
     print(f"Copied {ASSETS_DIR} → {dest}")
 
 
-def _render_index(posts):
+def _post_tag_chips_html(tags):
+    parts = []
+    for t in tags:
+        label = html.escape(t)
+        href = html.escape(_tag_href(t))
+        parts.append(f'<a class="tag-chip" href="{href}" data-tag="{label}">#{label}</a>')
+    return ''.join(parts)
+
+
+_FILTER_SCRIPT = "<script>\n(function () {\n  var chips = document.querySelectorAll('.tag-filters [data-filter]');\n  var items = document.querySelectorAll('.post-list > li[data-tags]');\n  var empty = document.getElementById('filter-empty');\n  function setFilter(tag) {\n    var shown = 0;\n    items.forEach(function (li) {\n      var tags = (li.getAttribute('data-tags') || '').split(/\\s+/).filter(Boolean);\n      var match = !tag || tag === 'all' || tags.indexOf(tag) !== -1;\n      li.classList.toggle('hidden', !match);\n      if (match) shown++;\n    });\n    chips.forEach(function (c) {\n      var active = c.getAttribute('data-filter') === (tag || 'all');\n      c.classList.toggle('active', active);\n      c.setAttribute('aria-pressed', active ? 'true' : 'false');\n    });\n    if (empty) empty.classList.toggle('visible', shown === 0);\n  }\n  chips.forEach(function (chip) {\n    chip.addEventListener('click', function () {\n      setFilter(chip.getAttribute('data-filter') || 'all');\n    });\n  });\n})();\n</script>"
+
+
+def _filter_script():
+    return _FILTER_SCRIPT
+
+
+def _render_index(posts, all_tags):
+    filter_chips = [
+        '<button type="button" class="tag-chip active" data-filter="all" aria-pressed="true">All</button>'
+    ]
+    for tag, count in sorted(all_tags.items(), key=lambda x: x[0].lower()):
+        esc = html.escape(tag)
+        filter_chips.append(
+            f'<button type="button" class="tag-chip" data-filter="{esc}" aria-pressed="false">'
+            f'{esc} <span class="count">({count})</span></button>'
+        )
+    filters = (
+        '<div class="tag-filters" role="group" aria-label="Filter by tag">\n'
+        + '\n'.join(filter_chips)
+        + '\n</div>'
+    )
+
     items = []
     for p in posts:
         href = html.escape(_href(f"posts/{p['basename']}.html"))
         title = html.escape(p['title'])
         date = html.escape(p['date'])
+        data_tags = html.escape(' '.join(p['tags']))
+        chips = _post_tag_chips_html(p['tags'])
+        tags_row = f'<div class="post-tags">{chips}</div>' if chips else ''
         items.append(
-            f'<li><span class="date">{date}</span> '
-            f'<a href="{href}">{title}</a></li>'
+            f'<li data-tags="{data_tags}">'
+            f'<div class="post-row">'
+            f'<span class="date">{date}</span>'
+            f'<a class="post-title" href="{href}">{title}</a>'
+            f'{tags_row}'
+            f'</div></li>'
         )
     if items:
-        listing = '<ul class="post-list">\n' + '\n'.join(items) + '\n</ul>'
+        listing = (
+            '<ul class="post-list">\n'
+            + '\n'.join(items)
+            + '\n</ul>\n'
+            '<p id="filter-empty" class="empty-filter">No posts match this tag.</p>'
+        )
     else:
         listing = '<p>No posts yet.</p>'
-    body = f'<h1>Posts</h1>\n{listing}'
+    body = (
+        f'<h1 class="page-title">Posts</h1>\n'
+        f'<p class="page-sub">{html.escape(SITE_DESCRIPTION)}</p>\n'
+        f'{filters}\n{listing}'
+    )
     return _page_shell(
         title=SITE_TITLE,
         description=SITE_DESCRIPTION,
         canonical=_site_url(''),
         body_html=body,
+        active='posts',
+        extra_body_end=_filter_script() if items else '',
     )
 
 
@@ -439,15 +452,14 @@ def _render_post(post):
     content_html = _rewrite_relative_urls(_markdown_to_html(post['body']))
     tags_html = ''
     if post['tags']:
-        tag_items = ''.join(f'<li>#{html.escape(t)}</li>' for t in post['tags'])
-        tags_html = f' · <ul class="tags">{tag_items}</ul>'
+        tags_html = f'<div class="tags">{_post_tag_chips_html(post["tags"])}</div>'
     body = (
         f'<article>\n'
-        f'<h1>{html.escape(post["title"])}</h1>\n'
-        f'<p class="post-meta"><time datetime="{html.escape(post["date"])}">'
-        f'{html.escape(post["date"])}</time>{tags_html}</p>\n'
-        f'{content_html}\n'
-        f'<p class="back"><a href="{html.escape(_href(""))}">← Back to posts</a></p>\n'
+        f'<h1 class="page-title">{html.escape(post["title"])}</h1>\n'
+        f'<div class="post-meta"><time datetime="{html.escape(post["date"])}">'
+        f'{html.escape(post["date"])}</time>{tags_html}</div>\n'
+        f'<div class="prose">\n{content_html}\n</div>\n'
+        f'<p class="back"><a href="{html.escape(_href(""))}">&larr; Back to posts</a></p>\n'
         f'</article>'
     )
     return _page_shell(
@@ -456,13 +468,81 @@ def _render_post(post):
         canonical=_site_url(f'posts/{post["basename"]}.html'),
         body_html=body,
         og_type='article',
+        active='posts',
     )
 
 
-def _write_sitemap(posts):
-    urls = [_site_url('')]
+def _render_tags_index(all_tags):
+    items = []
+    for tag, count in sorted(all_tags.items(), key=lambda x: x[0].lower()):
+        href = html.escape(_tag_href(tag))
+        esc = html.escape(tag)
+        items.append(
+            f'<li><a class="tag-chip" href="{href}">#{esc} '
+            f'<span class="count">({count})</span></a></li>'
+        )
+    if items:
+        cloud = '<ul class="tag-cloud">\n' + '\n'.join(items) + '\n</ul>'
+    else:
+        cloud = '<p>No tags yet.</p>'
+    body = (
+        f'<h1 class="page-title">Tags</h1>\n'
+        f'<p class="page-sub">Browse posts by category</p>\n'
+        f'{cloud}'
+    )
+    return _page_shell(
+        title=f'Tags · {SITE_TITLE}',
+        description=f'Tag index — {SITE_DESCRIPTION}',
+        canonical=_site_url('tags/'),
+        body_html=body,
+        active='tags',
+    )
+
+
+def _render_tag_page(tag, posts_for_tag, count):
+    items = []
+    for p in posts_for_tag:
+        href = html.escape(_href(f"posts/{p['basename']}.html"))
+        title = html.escape(p['title'])
+        date = html.escape(p['date'])
+        chips = _post_tag_chips_html(p['tags'])
+        tags_row = f'<div class="post-tags">{chips}</div>' if chips else ''
+        items.append(
+            f'<li>'
+            f'<div class="post-row">'
+            f'<span class="date">{date}</span>'
+            f'<a class="post-title" href="{href}">{title}</a>'
+            f'{tags_row}'
+            f'</div></li>'
+        )
+    listing = (
+        '<ul class="post-list">\n' + '\n'.join(items) + '\n</ul>'
+        if items
+        else '<p>No posts.</p>'
+    )
+    esc_tag = html.escape(tag)
+    plural = 's' if count != 1 else ''
+    body = (
+        f'<h1 class="page-title">#{esc_tag}</h1>\n'
+        f'<p class="page-sub">{count} post{plural} &middot; '
+        f'<a href="{html.escape(_href("tags/"))}">All tags</a></p>\n'
+        f'{listing}'
+    )
+    return _page_shell(
+        title=f'#{tag} · {SITE_TITLE}',
+        description=f'Posts tagged #{tag}',
+        canonical=_site_url(f'tags/{quote(tag, safe="-_.")}.html'),
+        body_html=body,
+        active='tags',
+    )
+
+
+def _write_sitemap(posts, all_tags):
+    urls = [_site_url(''), _site_url('tags/')]
     for p in posts:
         urls.append(_site_url(f'posts/{p["basename"]}.html'))
+    for tag in sorted(all_tags.keys()):
+        urls.append(_site_url(f'tags/{quote(tag, safe="-_.")}.html'))
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -481,39 +561,60 @@ def _write_sitemap(posts):
 
 def _write_robots():
     sitemap = _site_url('sitemap.xml')
-    content = f'''User-agent: *
-Allow: /
-
-Sitemap: {sitemap}
-'''
+    content = (
+        'User-agent: *\n'
+        'Allow: /\n'
+        '\n'
+        f'Sitemap: {sitemap}\n'
+    )
     path = os.path.join(PUBLIC_DIR, 'robots.txt')
     with open(path, 'w', encoding='utf-8') as f:
         f.write(content)
     return path
 
 
-def export_static_site(posts):
+def export_static_site(posts, all_tags=None):
     """Build a minimal static site under public/ for GitHub Pages."""
+    if all_tags is None:
+        all_tags = {}
+        for p in posts:
+            for tag in p['tags']:
+                all_tags[tag] = all_tags.get(tag, 0) + 1
+
     if os.path.isdir(PUBLIC_DIR):
-        # Clear previous generated HTML/sitemap but keep structure simple: wipe & rebuild
         shutil.rmtree(PUBLIC_DIR)
     os.makedirs(os.path.join(PUBLIC_DIR, 'posts'), exist_ok=True)
+    os.makedirs(os.path.join(PUBLIC_DIR, 'tags'), exist_ok=True)
 
     _write_site_css()
     _copy_assets()
 
     index_path = os.path.join(PUBLIC_DIR, 'index.html')
     with open(index_path, 'w', encoding='utf-8') as f:
-        f.write(_render_index(posts))
+        f.write(_render_index(posts, all_tags))
 
     for p in posts:
         out = os.path.join(PUBLIC_DIR, 'posts', f"{p['basename']}.html")
         with open(out, 'w', encoding='utf-8') as f:
             f.write(_render_post(p))
 
-    _write_sitemap(posts)
+    tags_index = os.path.join(PUBLIC_DIR, 'tags', 'index.html')
+    with open(tags_index, 'w', encoding='utf-8') as f:
+        f.write(_render_tags_index(all_tags))
+
+    for tag, count in all_tags.items():
+        tag_posts = [p for p in posts if tag in p['tags']]
+        tag_posts.sort(key=lambda x: x['date'], reverse=True)
+        out = os.path.join(PUBLIC_DIR, 'tags', _tag_filename(tag))
+        with open(out, 'w', encoding='utf-8') as f:
+            f.write(_render_tag_page(tag, tag_posts, count))
+
+    _write_sitemap(posts, all_tags)
     _write_robots()
-    print(f"Exported static site to {PUBLIC_DIR}/ ({len(posts)} posts)")
+    print(
+        f"Exported static site to {PUBLIC_DIR}/ "
+        f"({len(posts)} posts, {len(all_tags)} tags)"
+    )
 
 
 if __name__ == '__main__':
@@ -535,4 +636,4 @@ if __name__ == '__main__':
     generate_tag_pages(all_tags, all_posts)
     daily_mascot = rotate_mascot()
     update_readme(all_posts, all_tags, daily_mascot)
-    export_static_site(all_posts)
+    export_static_site(all_posts, all_tags)

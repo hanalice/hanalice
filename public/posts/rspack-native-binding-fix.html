@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>pnpm 安装 rspack 原生 binding 缺失导致 build 失败</h1>
-<p class="post-meta"><time datetime="2026-08-08">2026-08-08</time> · <ul class="tags"><li>#pnpm</li><li>#rspack</li><li>#native-binding</li><li>#WSL</li><li>#optional-dependencies</li></ul></p>
+<h1 class="page-title">pnpm 安装 rspack 原生 binding 缺失导致 build 失败</h1>
+<div class="post-meta"><time datetime="2026-08-08">2026-08-08</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/pnpm.html" data-tag="pnpm">#pnpm</a><a class="tag-chip" href="/hanalice/tags/rspack.html" data-tag="rspack">#rspack</a><a class="tag-chip" href="/hanalice/tags/native-binding.html" data-tag="native-binding">#native-binding</a><a class="tag-chip" href="/hanalice/tags/WSL.html" data-tag="WSL">#WSL</a><a class="tag-chip" href="/hanalice/tags/optional-dependencies.html" data-tag="optional-dependencies">#optional-dependencies</a></div></div>
+<div class="prose">
 <h3>问题描述</h3>
 <p>在 WSL（Ubuntu 24.04）环境下，使用 pnpm 在 monorepo 根目录执行 <code>pnpm install</code> 后，进入子包 <code>apps/1000</code> 执行 <code>npm run build:rspack</code>，报错如下：</p>
 <pre><code>Error: Cannot find native binding.
@@ -163,11 +171,13 @@ Cannot find module '@rspack/binding-linux-x64-gnu'
 </code></pre>
 <p>下次执行 <code>pnpm install</code> 时，由于目录已存在且 lockfile 未变，pnpm 误判为"已安装"并跳过，导致问题持续，而不会自动修复。</p>
 <p>配置 <code>supportedArchitectures</code> 后，pnpm 被迫重新评估平台 binding 包的安装状态，发现内容缺失，才触发了真正的下载补全。</p>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

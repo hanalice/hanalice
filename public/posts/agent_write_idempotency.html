@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>Agent 写操作的幂等：超时之后凭什么敢重试</h1>
-<p class="post-meta"><time datetime="2026-09-16">2026-09-16</time> · <ul class="tags"><li>#Agent</li><li>#MCP</li><li>#Idempotency</li><li>#Tool-Calling</li><li>#Reliability</li></ul></p>
+<h1 class="page-title">Agent 写操作的幂等：超时之后凭什么敢重试</h1>
+<div class="post-meta"><time datetime="2026-09-16">2026-09-16</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Agent.html" data-tag="Agent">#Agent</a><a class="tag-chip" href="/hanalice/tags/MCP.html" data-tag="MCP">#MCP</a><a class="tag-chip" href="/hanalice/tags/Idempotency.html" data-tag="Idempotency">#Idempotency</a><a class="tag-chip" href="/hanalice/tags/Tool-Calling.html" data-tag="Tool-Calling">#Tool-Calling</a><a class="tag-chip" href="/hanalice/tags/Reliability.html" data-tag="Reliability">#Reliability</a></div></div>
+<div class="prose">
 <h2>1. 问题现象 (Problem Symptoms)</h2>
 <p>上一篇工具面讲过现象 C：<code>create_order</code> 超时，模型分不清「已落库但响应丢了」和「根本没写成功」，再调一次就双写。评估面也提过：空转重试在终答绿灯下仍可能把副作用放大。本文只钉<strong>写路径重试语义</strong>——不是 Temporal / checkpoint 教程，也不是 durable execution 全景；那些是进程死亡与工作流历史那一层。这里是：<strong>MCP / 工具调用在 timeout 之后，凭什么敢重试，而不变成 side effect amplifier</strong>。</p>
 <p>生产里我们反复看到同一类事故：Host 或 Agent 对写工具做「看起来合理」的自动重试，账本、订单、邮件、扣款各多一份。</p>
@@ -410,11 +418,13 @@ async function callCreateOrder(intent: { sku: string; qty: number }, taskId: str
 <li>Stripe Docs — <a href="https://docs.stripe.com/api/idempotent_requests">Idempotent requests</a>（Idempotency-Key：同键同体 replay、同键异体冲突；分布式写重试惯例，非 MCP 专有）。</li>
 <li>berthelius (Frihet) — <a href="https://dev.to/frihet/designing-mcp-tools-an-agent-wont-misuse-1ah1">Designing MCP tools an agent won't misuse</a>（Can't recover / typed errors / annotations 与 enforcement 分工）。</li>
 </ol>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

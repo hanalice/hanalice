@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>Git修改历史提交的作者信息</h1>
-<p class="post-meta"><time datetime="2024-09-19">2024-09-19</time> · <ul class="tags"><li>#Git</li></ul></p>
+<h1 class="page-title">Git修改历史提交的作者信息</h1>
+<div class="post-meta"><time datetime="2024-09-19">2024-09-19</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Git.html" data-tag="Git">#Git</a></div></div>
+<div class="prose">
 <ol>
 <li>config git username and email globally, otherwise omit --global to config in current repo.</li>
 </ol>
@@ -50,11 +58,13 @@ $ git config --global user.email &quot;new email&quot;
 <ol>
 <li>check the result using <code>git log</code> command</li>
 </ol>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>使用ssh-agent 管理多个ssh key</h1>
-<p class="post-meta"><time datetime="2017-08-07">2017-08-07</time> · <ul class="tags"><li>#SSH</li><li>#Git</li><li>#Agent</li></ul></p>
+<h1 class="page-title">使用ssh-agent 管理多个ssh key</h1>
+<div class="post-meta"><time datetime="2017-08-07">2017-08-07</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/SSH.html" data-tag="SSH">#SSH</a><a class="tag-chip" href="/hanalice/tags/Git.html" data-tag="Git">#Git</a><a class="tag-chip" href="/hanalice/tags/Agent.html" data-tag="Agent">#Agent</a></div></div>
+<div class="prose">
 <pre><code>举例当前用户为test_1 和 hanalice
 </code></pre>
 <h3>查看代理</h3>
@@ -63,11 +71,13 @@ Hi XXX! You've successfully authenticated, but GitHub does not provide shell acc
 如果出现以下结果，请检查github的ssh管理里添加的公钥是否正确
 permission denied (publickey)
 </code></pre>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

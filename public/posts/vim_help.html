@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>Vim命令合集</h1>
-<p class="post-meta"><time datetime="2017-08-15">2017-08-15</time> · <ul class="tags"><li>#Vim</li></ul></p>
+<h1 class="page-title">Vim命令合集</h1>
+<div class="post-meta"><time datetime="2017-08-15">2017-08-15</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Vim.html" data-tag="Vim">#Vim</a></div></div>
+<div class="prose">
 <h3>命令历史</h3>
 <p>以:和/开头的命令都有历史纪录，可以首先键入:或/然后按上下箭头来选择某个历史命令。</p>
 <h3>启动vim</h3>
@@ -333,11 +341,13 @@ $ vimtutor
 :syntax case match 大小写敏感，int和Int将视为不同的语法元素
 :syntax case ignore 大小写无关，int和Int将视为相同的语法元素，并使用同样的配色方案
 </code></pre>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>
