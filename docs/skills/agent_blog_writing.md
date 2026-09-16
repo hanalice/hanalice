@@ -69,15 +69,25 @@
 参考 (References)
 ```
 
-Frontmatter **必须**完整：
+Frontmatter **必须**完整（缺任一字段不得进 `in_review`）：
 
 ```yaml
 ---
 title: 中文标题（含失败面或机制名）
 date: YYYY-MM-DD
 tags: Tag1, Tag2, Tag3
+description: 一两句说清失败面 + 结论（约 80～160 字，供卡片摘要 / meta / OG）
 ---
 ```
+
+### 3.1 `description` 强制要求（P1 / SEO 文章层）
+
+- **必填**：不得省略；不得指望 sync 从正文「碰巧截对」  
+- **内容**：失败现象 + 可检索结论；避免口号、避免复述标题  
+- **长度**：约 80～160 汉字（或等价信息密度）；首页卡片会截断展示  
+- **样板**：`posts/mcp_tool_design_valid_but_wrong.md`、`posts/agent_write_idempotency.md`  
+- **开头**：正文前 2～3 句仍须结论先行，可与 description 呼应但不必逐字相同  
+- **互链**：文内/文末至少链到 1 篇相关已发文（仓库相对路径 `posts/….md` 即可，sync 会改成 Pages `.html`）
 
 ---
 
@@ -105,7 +115,7 @@ tags: Tag1, Tag2, Tag3
 | 角色 | 职责 | 读写 |
 | --- | --- | --- |
 | **选题 Scout** | 调研 Agent 领域新坑；写入/更新 `docs/blog-backlog.md` | 读写 backlog；只读 `posts/` |
-| **写稿 Writer** | 取一条 `ready`；按本文写 `posts/*.md`；本地成稿 | 读写 posts + backlog 状态 |
+| **写稿 Writer** | 取一条 `ready`；按本文写 `posts/*.md`（含强制 `description`）；本地成稿 | 读写 posts + backlog 状态 |
 | **审阅 Reviewer** | 按 §7 验收；给修改意见或批准发布 | 只读 posts；写 backlog 状态与审阅记录 |
 | **协调 Coordinator** | 排期、拉通 Scout→Writer→Reviewer；**仅审过才 push**；更新 backlog→`published` | 编排；推送；不代替三人写稿/审稿 |
 
@@ -121,7 +131,10 @@ tags: Tag1, Tag2, Tag3
 
 - [ ] 踩坑/排查/对照，非概念贴  
 - [ ] 架构师经验之谈 + 具体失败案例  
-- [ ] frontmatter 齐全；路径在 `posts/`  
+- [ ] frontmatter 齐全：`title` / `date` / `tags` / **`description`**；路径在 `posts/`  
+- [ ] `description` 含失败面 + 结论（非口号、非复述标题）  
+- [ ] 开头 2～3 句可当 snippet；标题含可搜失败面/机制名  
+- [ ] 至少 1 条系列/相关已发文互链  
 - [ ] 含 BAD/GOOD 或 Vn 或清单  
 - [ ] 规范专名；引用可追溯  
 - [ ] 对应 backlog 条目已从 `ready` 推进  
