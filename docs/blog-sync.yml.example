@@ -1,0 +1,48 @@
+name: Blog Sync & Mascot Rotation
+
+on:
+  schedule:
+    - cron: '0 0 1 * *' # 每月1日凌晨运行
+  push:
+    branches:
+      - main
+    paths:
+      - 'posts/**'
+      - 'assets/mascots/**'
+      - 'scripts/sync.py'
+      - 'requirements.txt'
+      - 'public/**'
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Sync Script
+        run: python scripts/sync.py
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "hanalice"
+          git config --global user.email "hanalice@users.noreply.github.com"
+          git add README.md tags/ public/
+          # Mascot daily file may be .png/.gif/etc; add directory and ignore missing daily.png
+          git add assets/mascots/ || true
+          git add -f assets/mascots/daily.png 2>/dev/null || true
+          git commit -m "Auto update README, tags, mascot, and public site" || exit 0
+          git push
