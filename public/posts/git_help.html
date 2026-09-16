@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>Git常用命令</h1>
-<p class="post-meta"><time datetime="2017-11-30">2017-11-30</time> · <ul class="tags"><li>#Git</li></ul></p>
+<h1 class="page-title">Git常用命令</h1>
+<div class="post-meta"><time datetime="2017-11-30">2017-11-30</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Git.html" data-tag="Git">#Git</a></div></div>
+<div class="prose">
 <pre><code># 查看远程origin信息
 git remote show origin
 
@@ -76,11 +84,13 @@ git rebase origin/master
 git rebase -i &lt;commit-id&gt;
 
 </code></pre>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

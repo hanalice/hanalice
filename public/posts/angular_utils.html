@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>AngularJS的工具类集合</h1>
-<p class="post-meta"><time datetime="2017-08-15">2017-08-15</time> · <ul class="tags"><li>#AngularJS</li></ul></p>
+<h1 class="page-title">AngularJS的工具类集合</h1>
+<div class="post-meta"><time datetime="2017-08-15">2017-08-15</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/AngularJS.html" data-tag="AngularJS">#AngularJS</a></div></div>
+<div class="prose">
 <h4>JSON obj 和 JSON string 相互转换</h4>
 <ol>
 <li>angular.fromJson(), 将JSON字符串解析成一个对象或者数组</li>
@@ -66,11 +74,13 @@ console.log(strArr);
   }
 ]
 </code></pre>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

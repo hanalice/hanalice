@@ -309,7 +309,11 @@ class TestExportStaticSite(unittest.TestCase):
                     if post is not None:
                         all_posts.append(post)
             all_posts.sort(key=lambda x: x['date'], reverse=True)
-            sync.export_static_site(all_posts)
+            all_tags = {}
+            for p in all_posts:
+                for tag in p['tags']:
+                    all_tags[tag] = all_tags.get(tag, 0) + 1
+            sync.export_static_site(all_posts, all_tags)
 
             sitemap = os.path.join(public, 'sitemap.xml')
             post_html = os.path.join(public, 'posts', 'hello_world.html')
@@ -325,6 +329,63 @@ class TestExportStaticSite(unittest.TestCase):
                 body = f.read()
             self.assertIn('Hello World', body)
             self.assertIn('rel="canonical"', body)
+
+    def test_export_nav_and_tag_pages(self):
+        with tempfile.TemporaryDirectory() as d:
+            public = self._setup_repo(d)
+            all_posts = []
+            for f in os.listdir(sync.POSTS_DIR):
+                if f.endswith('.md'):
+                    post = sync.parse_post(os.path.join(sync.POSTS_DIR, f))
+                    if post is not None:
+                        all_posts.append(post)
+            all_tags = {'Test': 1}
+            sync.export_static_site(all_posts, all_tags)
+
+            index_html = os.path.join(public, 'index.html')
+            tags_index = os.path.join(public, 'tags', 'index.html')
+            tag_page = os.path.join(public, 'tags', 'Test.html')
+            post_html = os.path.join(public, 'posts', 'hello_world.html')
+            css = os.path.join(public, 'assets', 'site.css')
+
+            self.assertTrue(os.path.exists(tags_index), "public/tags/index.html must exist")
+            self.assertTrue(os.path.exists(tag_page), "public/tags/<Tag>.html must exist")
+
+            with open(index_html, encoding='utf-8') as f:
+                index = f.read()
+            self.assertIn('site-nav', index)
+            self.assertIn('data-filter="all"', index)
+            self.assertIn('data-filter="Test"', index)
+            self.assertIn('data-tags=', index)
+            self.assertIn('/hanalice/tags/', index)
+            self.assertIn('Posts', index)
+
+            with open(tags_index, encoding='utf-8') as f:
+                ti = f.read()
+            self.assertIn('site-nav', ti)
+            self.assertIn('Test', ti)
+            self.assertIn('/hanalice/tags/Test.html', ti)
+
+            with open(tag_page, encoding='utf-8') as f:
+                tp = f.read()
+            self.assertIn('Hello World', tp)
+            self.assertIn('site-nav', tp)
+
+            with open(post_html, encoding='utf-8') as f:
+                post = f.read()
+            self.assertIn('site-nav', post)
+            self.assertIn('/hanalice/tags/Test.html', post)
+
+            with open(css, encoding='utf-8') as f:
+                style = f.read()
+            self.assertIn('-apple-system', style)
+            self.assertIn('#f5f5f7', style)
+            self.assertIn('#0066cc', style)
+
+            with open(os.path.join(public, 'sitemap.xml'), encoding='utf-8') as f:
+                sm = f.read()
+            self.assertIn('/tags/', sm)
+            self.assertIn('/tags/Test.html', sm)
 
     def test_parse_post_includes_description_from_body(self):
         with tempfile.TemporaryDirectory() as d:

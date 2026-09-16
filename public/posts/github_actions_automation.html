@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>极简主义艺术：基于 GitHub Actions 的静态个人门户自动化体系</h1>
-<p class="post-meta"><time datetime="2017-07-01">2017-07-01</time> · <ul class="tags"><li>#DevOps</li><li>#Git</li><li>#Automation</li></ul></p>
+<h1 class="page-title">极简主义艺术：基于 GitHub Actions 的静态个人门户自动化体系</h1>
+<div class="post-meta"><time datetime="2017-07-01">2017-07-01</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/DevOps.html" data-tag="DevOps">#DevOps</a><a class="tag-chip" href="/hanalice/tags/Git.html" data-tag="Git">#Git</a><a class="tag-chip" href="/hanalice/tags/Automation.html" data-tag="Automation">#Automation</a></div></div>
+<div class="prose">
 <p>在当今各种重量级 Web 框架（如 React, Next.js）和各种付费云服务器盛行的时代，你是否想过回归极简主义？用纯粹的 Markdown 配合 GitHub 原生功能，零服务器成本，打造一个轻量、优雅、有灵魂的技术“个人名片”兼“博客门户”？</p>
 <p>本篇文章将带你深入探究我这个 GitHub Profile 个人主页背后的全自动化构建与运维体系，看看我们是如何用一个轻量级 Python 脚本和 GitHub Actions，实现博文自动同步、分类标签重构以及每日像素小人趣味轮换的。</p>
 <hr />
@@ -57,11 +65,13 @@
 <h2>💡 4. 总结与启示</h2>
 <p>本项目的自动化体系用最轻量级的标准库和最原生的 GitHub 服务，构建起了一套闭环的技术门户 CMS 系统。它证明了：<strong>极简主义并不意味着功能的缺失，相反，它用最少的依赖，带来了最高的可靠性和最纯粹的阅读体验。</strong></p>
 <p>如果你也想拥有一套完全属于自己的、零运维成本的个人主页，不妨克隆本仓库，开启你的极简自动化之旅吧！</p>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

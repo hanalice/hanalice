@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>Trajectory Eval：答对了为什么还是假绿</h1>
-<p class="post-meta"><time datetime="2026-09-15">2026-09-15</time> · <ul class="tags"><li>#Agent</li><li>#Evaluation</li><li>#Trajectory</li><li>#Observability</li><li>#Tool-Calling</li></ul></p>
+<h1 class="page-title">Trajectory Eval：答对了为什么还是假绿</h1>
+<div class="post-meta"><time datetime="2026-09-15">2026-09-15</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Agent.html" data-tag="Agent">#Agent</a><a class="tag-chip" href="/hanalice/tags/Evaluation.html" data-tag="Evaluation">#Evaluation</a><a class="tag-chip" href="/hanalice/tags/Trajectory.html" data-tag="Trajectory">#Trajectory</a><a class="tag-chip" href="/hanalice/tags/Observability.html" data-tag="Observability">#Observability</a><a class="tag-chip" href="/hanalice/tags/Tool-Calling.html" data-tag="Tool-Calling">#Tool-Calling</a></div></div>
+<div class="prose">
 <h2>1. 问题现象 (Problem Symptoms)</h2>
 <p>上一篇讲工具面：schema 绿灯、业务却错。评估面有对称的坑——<strong>final answer 绿了，轨迹其实在空转</strong>。</p>
 <p>CI 只比最终字符串或一个 LLM-as-judge 的「答案对不对」。合并门打开，成本曲线、工具误用、重试风暴都还在生产里。这种绿灯叫 <strong>false green（假绿）</strong>：outcome 过了，path 没过。</p>
@@ -337,11 +345,13 @@ def eval_refund_agent(run):
 <li>Confident AI — <a href="https://www.confident-ai.com/blog/llm-agent-evaluation-complete-guide">LLM Agent Evaluation Metrics in 2026</a>（end-to-end / trajectory / component；Tool Correctness、Step Efficiency、Task Completion；答对仍可能路径失败）。</li>
 <li>DeepEval — <a href="https://deepeval.com/guides/guides-ai-agent-evaluation">AI Agent Evaluation</a>（trajectory vs end-to-end vs component；tracing 要求）。</li>
 </ol>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>

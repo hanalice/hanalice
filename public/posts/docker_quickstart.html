@@ -16,12 +16,20 @@
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/hanalice/">hanalice</a>
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-title" href="/hanalice/">hanalice</a>
+    <ul class="nav-links">
+      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/tags/">Tags</a></li>
+      <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
 </header>
 <main class="site-main">
 <article>
-<h1>Dockerfile 快速上手：构建并运行你的第一个容器</h1>
-<p class="post-meta"><time datetime="2017-07-18">2017-07-18</time> · <ul class="tags"><li>#Docker</li><li>#DevOps</li><li>#Container</li><li>#Tutorial</li></ul></p>
+<h1 class="page-title">Dockerfile 快速上手：构建并运行你的第一个容器</h1>
+<div class="post-meta"><time datetime="2017-07-18">2017-07-18</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Docker.html" data-tag="Docker">#Docker</a><a class="tag-chip" href="/hanalice/tags/DevOps.html" data-tag="DevOps">#DevOps</a><a class="tag-chip" href="/hanalice/tags/Container.html" data-tag="Container">#Container</a><a class="tag-chip" href="/hanalice/tags/Tutorial.html" data-tag="Tutorial">#Tutorial</a></div></div>
+<div class="prose">
 <p>Docker 是现代开发中不可或缺的工具。通过 <code>Dockerfile</code>，我们可以将环境配置“代码化”，确保在任何地方运行的结果都是一致的。</p>
 <p>本文将通过一个简单的例子，演示如何使用 Dockerfile 创建一个基于 Ubuntu 的 Apache Web 服务器。</p>
 <h3>1. 编写进阶版 Dockerfile</h3>
@@ -86,11 +94,13 @@ CMD [&quot;/usr/sbin/apache2ctl&quot;, &quot;-D&quot;, &quot;FOREGROUND&quot;]
 <hr />
 <h3>总结</h3>
 <p>通过 <code>COPY</code> 实现持续集成，通过 <code>ENV</code> 实现可追踪性，通过 <code>USER</code> 实现安全加固。这套组合拳能让你的镜像更专业、更健壮。</p>
-<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</div>
+<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
 </article>
 </main>
 <footer class="site-footer">
-  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+  <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
+
 </body>
 </html>
