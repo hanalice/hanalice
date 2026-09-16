@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AngularJS的工具类集合 · hanalice</title>
+<meta name="description" content="JSON obj 和 JSON string 相互转换 1. angular.fromJson, 将JSON字符串解析成一个对象或者数组">
+<link rel="canonical" href="https://hanalice.github.io/hanalice/posts/angular_utils.html">
+<meta property="og:title" content="AngularJS的工具类集合 · hanalice">
+<meta property="og:description" content="JSON obj 和 JSON string 相互转换 1. angular.fromJson, 将JSON字符串解析成一个对象或者数组">
+<meta property="og:url" content="https://hanalice.github.io/hanalice/posts/angular_utils.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="hanalice">
+<link rel="stylesheet" href="/hanalice/assets/site.css">
+
+</head>
+<body>
+<header class="site-header">
+  <a class="site-title" href="/hanalice/">hanalice</a>
+</header>
+<main class="site-main">
+<article>
+<h1>AngularJS的工具类集合</h1>
+<p class="post-meta"><time datetime="2017-08-15">2017-08-15</time> · <ul class="tags"><li>#AngularJS</li></ul></p>
+<h4>JSON obj 和 JSON string 相互转换</h4>
+<ol>
+<li>angular.fromJson(), 将JSON字符串解析成一个对象或者数组</li>
+</ol>
+<pre><code>var json = '{&quot;name&quot;: &quot;lily&quot;, &quot;age&quot;: 20}';
+var jsonArr = '[{&quot;name&quot;: &quot;tom&quot;, &quot;age&quot;: 20},{&quot;name&quot;: &quot;mike&quot;, &quot;age&quot;: 19}]';
+
+var obj = angular.fromJson(json);
+console.log(obj.name);
+var objArr = angular.fromJson(jsonArr);
+console.log(objArr[0].name);
+console.log(objArr[1].age);
+
+# result
+lily
+tom
+19
+</code></pre>
+<ol>
+<li>angular.toJson(), 从obj 到json string</li>
+</ol>
+<pre><code>var obj = {&quot;name&quot;: &quot;jeney&quot;, &quot;age&quot;: 25};
+var objArr = [{&quot;name&quot;: &quot;tom&quot;, &quot;age&quot;: 30}, {&quot;name&quot;: &quot;god&quot;, &quot;age&quot;: 50}];
+var str = angular.toJson(obj, true);
+console.log(str);
+var strArr = angular.toJson(objArr, true);
+console.log(strArr);
+
+# result
+{
+  &quot;name&quot;: &quot;jeney&quot;,
+  &quot;age&quot;: 25
+}
+[
+  {
+    &quot;name&quot;: &quot;tom&quot;,
+    &quot;age&quot;: 30
+  },
+  {
+    &quot;name&quot;: &quot;god&quot;,
+    &quot;age&quot;: 50
+  }
+]
+</code></pre>
+<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</article>
+</main>
+<footer class="site-footer">
+  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+</footer>
+</body>
+</html>

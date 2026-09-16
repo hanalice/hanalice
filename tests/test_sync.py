@@ -243,5 +243,99 @@ class TestUpdateReadme(unittest.TestCase):
             self.assertNotIn('{{LAST_SYNC}}', body)
 
 
+
+# ── GitHub Pages static export ───────────────────────────────────────────────
+
+class TestExportStaticSite(unittest.TestCase):
+
+    def setUp(self):
+        self._orig = {
+            'POSTS_DIR': sync.POSTS_DIR,
+            'TAGS_DIR': sync.TAGS_DIR,
+            'README_TEMPLATE': sync.README_TEMPLATE,
+            'README_OUTPUT': sync.README_OUTPUT,
+            'MASCOTS_DIR': sync.MASCOTS_DIR,
+            'ASSETS_DIR': sync.ASSETS_DIR,
+            'PUBLIC_DIR': sync.PUBLIC_DIR,
+        }
+
+    def tearDown(self):
+        for k, v in self._orig.items():
+            setattr(sync, k, v)
+
+    def _setup_repo(self, d):
+        posts = os.path.join(d, 'posts')
+        tags = os.path.join(d, 'tags')
+        assets = os.path.join(d, 'assets')
+        mascots = os.path.join(assets, 'mascots')
+        public = os.path.join(d, 'public')
+        os.makedirs(posts)
+        os.makedirs(tags)
+        os.makedirs(mascots)
+        open(os.path.join(mascots, '01.png'), 'wb').close()
+        tpl = os.path.join(d, 'README.template.md')
+        _write(tpl,
+            "{{DAILY_MASCOT}}\n"
+            "<!-- BLOG-POST-LIST:START -->\n<!-- BLOG-POST-LIST:END -->\n"
+            "<!-- TAG-CLOUD:START -->\n<!-- TAG-CLOUD:END -->\n"
+            "{{LAST_SYNC}}"
+        )
+        _write(
+            os.path.join(posts, 'hello_world.md'),
+            "---\n"
+            "title: Hello World\n"
+            "date: 2026-01-15\n"
+            "tags: Test\n"
+            "---\n\n"
+            "First paragraph for description.\n\n"
+            "More body text.\n",
+        )
+        sync.POSTS_DIR = posts
+        sync.TAGS_DIR = tags
+        sync.README_TEMPLATE = tpl
+        sync.README_OUTPUT = os.path.join(d, 'README.md')
+        sync.MASCOTS_DIR = mascots
+        sync.ASSETS_DIR = assets
+        sync.PUBLIC_DIR = public
+        return public
+
+    def test_export_creates_sitemap_and_post_html(self):
+        with tempfile.TemporaryDirectory() as d:
+            public = self._setup_repo(d)
+            all_posts = []
+            for f in os.listdir(sync.POSTS_DIR):
+                if f.endswith('.md'):
+                    post = sync.parse_post(os.path.join(sync.POSTS_DIR, f))
+                    if post is not None:
+                        all_posts.append(post)
+            all_posts.sort(key=lambda x: x['date'], reverse=True)
+            sync.export_static_site(all_posts)
+
+            sitemap = os.path.join(public, 'sitemap.xml')
+            post_html = os.path.join(public, 'posts', 'hello_world.html')
+            index_html = os.path.join(public, 'index.html')
+            self.assertTrue(os.path.exists(sitemap), "public/sitemap.xml must exist after export")
+            self.assertTrue(os.path.exists(post_html), "public/posts/<basename>.html must exist")
+            self.assertTrue(os.path.exists(index_html), "public/index.html must exist")
+            with open(sitemap, encoding='utf-8') as f:
+                sm = f.read()
+            self.assertIn('hello_world.html', sm)
+            self.assertIn('https://hanalice.github.io/hanalice', sm)
+            with open(post_html, encoding='utf-8') as f:
+                body = f.read()
+            self.assertIn('Hello World', body)
+            self.assertIn('rel="canonical"', body)
+
+    def test_parse_post_includes_description_from_body(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'post.md')
+            _write(p, "---\ntitle: T\ndate: 2026-01-01\n---\n\nAlpha beta gamma.\n")
+            result = sync.parse_post(p)
+            self.assertIsNotNone(result)
+            self.assertIn('Alpha beta gamma', result['description'])
+            self.assertEqual(result['basename'], 'post')
+
+
+
 if __name__ == '__main__':
     unittest.main()
