@@ -1,3 +1,12 @@
+
+## Enable Pages (Actions)
+
+GitHub branch deploy only allows `/` or `/docs`, not `/public`.
+
+1. **Settings → Pages → Source → GitHub Actions**
+2. Run workflow **Deploy GitHub Pages** (or push under `public/`)
+3. Site: https://hanalice.github.io/hanalice/
+
 # GitHub Pages (static site from `public/`)
 
 `scripts/sync.py` exports a minimal static site to `public/` after updating README and tags.
