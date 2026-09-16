@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>构建崩溃与 Lockfile 版本漂移排查 · hanalice</title>
+<meta name="description" content="1. 问题现象 Problem Symptoms">
+<link rel="canonical" href="https://hanalice.github.io/hanalice/posts/vite_rolldown_build_troubleshooting.html">
+<meta property="og:title" content="构建崩溃与 Lockfile 版本漂移排查 · hanalice">
+<meta property="og:description" content="1. 问题现象 Problem Symptoms">
+<meta property="og:url" content="https://hanalice.github.io/hanalice/posts/vite_rolldown_build_troubleshooting.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="hanalice">
+<link rel="stylesheet" href="/hanalice/assets/site.css">
+
+</head>
+<body>
+<header class="site-header">
+  <a class="site-title" href="/hanalice/">hanalice</a>
+</header>
+<main class="site-main">
+<article>
+<h1>构建崩溃与 Lockfile 版本漂移排查</h1>
+<p class="post-meta"><time datetime="2026-08-10">2026-08-10</time> · <ul class="tags"><li>#vite</li><li>#rolldown</li><li>#ci</li><li>#build</li></ul></p>
+<h2>1. 问题现象 (Problem Symptoms)</h2>
+<p>在项目迭代过程中，遇到了以下两个关联构建异常：</p>
+<h3>现象 A：本地 <code>npm run build</code> 运行时抛出未知错误</h3>
+<p>执行 <code>npm run build</code>（即 <code>tsc -b &amp;&amp; vite build</code>）时，构建中断并抛出以下错误：</p>
+<pre><code class="language-text">failed to load config from /workspace/demo/vite.config.ts
+error during build:
+Error: Build failed with 2 errors:
+
+TypeError: Cannot convert undefined or null to object
+    at aggregateBindingErrorsIntoJsError (file:///workspace/demo/node_modules/rolldown/dist/shared/error-BzLGqhSQ.mjs:48:18)
+    at unwrapBindingResult (file:///workspace/demo/node_modules/rolldown/dist/shared/error-BzLGqhSQ.mjs:18:128)
+</code></pre>
+<h3>现象 B：GitHub Actions CI 与本地环境行为不一致</h3>
+<ul>
+<li><strong>GitHub Actions CI</strong>（执行 <code>npm ci</code>）：远端运行通过，无任何构建错误。</li>
+<li><strong>本地环境</strong>（执行 <code>npm run build</code>）：报错崩溃。</li>
+</ul>
+<hr />
+<h2>2. 根本原因分析 (Root Cause Analysis)</h2>
+<h3>原因一：依赖版本漂移 (Version Drift)</h3>
+<ol>
+<li>项目的 <a href="/hanalice/file:///workspace/demo/package.json">package.json</a> 中配置为 <code>"vite": "^8.0.0"</code>（<code>^</code> 允许自动更新次版本）。</li>
+<li>旧的提交 <a href="/hanalice/file:///workspace/demo/package-lock.json">package-lock.json</a> 将 <code>vite</code> 精确锁定在 <strong><code>8.0.0</code></strong>。</li>
+<li>当在本地运行 <code>npm install</code>（而非 <code>npm ci</code>）时，npm 自动将本地 <code>node_modules</code> 里的 <code>vite</code> 升级到了最新发行的 <strong><code>8.2.1</code></strong> 版本。</li>
+<li><strong>GitHub Actions CI</strong> 使用 <code>npm ci</code> 严格按 lockfile 安装，依然使用 <strong><code>8.0.0</code></strong>（构建成功）；而<strong>本地环境</strong>因 <code>npm install</code> 被漂移升级为 <strong><code>8.2.1</code></strong>（构建崩溃）。</li>
+</ol>
+<h3>原因二：Rolldown 引擎的“错误格式化二次崩溃”Bug (Double-Fault in Rolldown)</h3>
+<ol>
+<li>Vite 8.2.1 引入了全新的 Rust 引擎 <strong>Rolldown</strong> 作为配置文件打包器。</li>
+<li>在打包 <code>vite.config.ts</code> 时，Rolldown 的原生 Rust 绑定层（Node-API / NAPI）在解析 TypeScript 对象时遇到了解包异常。</li>
+<li>在 <a href="/hanalice/file:///workspace/demo/node_modules/rolldown/dist/shared/error-BzLGqhSQ.mjs#L37">node_modules/rolldown/dist/shared/error-BzLGqhSQ.mjs:37</a> 中，Rolldown 的错误格式化函数 <code>aggregateBindingErrorsIntoJsError</code> 缺少对空对象/未定义属性的防护处理：
+   <code>javascript
+   function aggregateBindingErrorsIntoJsError(rawErrors) {
+       const errors = rawErrors.map(normalizeBindingError);
+       ...
+       summary += getErrorMessage(errors[i]); // 💥 格式化工具对 null/undefined 调用造成二次崩溃
+   }</code></li>
+<li>格式化工具自身的崩溃反向抛出了 <code>TypeError: Cannot convert undefined or null to object</code>，掩盖了真实的编译信息。</li>
+</ol>
+<h3>原因三：跨项目对比——为什么 <code>Vite 8.2.0 + Rolldown 1.2.2</code> 的项目未报错？</h3>
+<p>在部分项目中，使用 <code>Vite 8.2.0</code>（搭配 <code>Rolldown 1.2.2</code>）并未引发构建崩溃，其根本原因为：</p>
+<ul>
+<li><strong>初级错误与次级格式化崩溃的分离</strong>：<code>TypeError: Cannot convert undefined or null to object</code> <strong>仅会在底层打包失败、调起错误格式化函数时</strong>才会被触发。</li>
+<li><strong>初级错误被消除</strong>：在 <code>Rolldown 1.2.2</code> 中，Rust 核心语法解析器修复了针对某些 TypeScript AST 节点的解析逻辑，打包配置文件时<strong>一次错误都没抛出</strong>。</li>
+<li><strong>格式化器未被激活</strong>：由于底层零错误，<code>aggregateBindingErrorsIntoJsError</code> 函数<strong>完全没有被执行</strong>，使得格式化器的防空保护缺陷处于“潜伏未触发”状态，构建顺利通过。</li>
+</ul>
+<hr />
+<h2>3. 排查思路与过程 (Troubleshooting Process)</h2>
+<pre><code class="language-mermaid">flowchart TD
+    A[收到 npm run build 报错] --&gt; B[比对 Git 历史与 package-lock.json]
+    B --&gt; C[发现 Vite 被从 8.0.0 升级到了 8.2.1]
+    C --&gt; D[深入 rolldown 源码注入 debug 日志]
+    D --&gt; E[定位到底层 NAPI 异常 + JS 格式化二次崩溃]
+    E --&gt; F[分析 CI 与本地差异: npm ci vs npm install]
+    F --&gt; G[本地执行 npm ci 还原为 Vite 8.0.0 并验证 399ms 成功]
+</code></pre>
+<ol>
+<li><strong>第一性原理比对</strong>：
+   通过 <code>git show b22fec8:package-lock.json</code> 与当前 <code>node_modules/vite/package.json</code> 比对，确认 Vite 从 <code>8.0.0</code> 变为了 <code>8.2.1</code>。</li>
+<li><strong>源码逆向插桩</strong>：
+   在 <a href="/hanalice/file:///workspace/demo/node_modules/rolldown/dist/shared/error-BzLGqhSQ.mjs">node_modules/rolldown/dist/shared/error-BzLGqhSQ.mjs</a> 中打印 <code>RAW ERRORS</code> 原始数组，捕获到了 NAPI 传递上来的 Raw Binding Error，证实是 Rolldown 的错误输出逻辑发生崩溃掩盖了原始信息。</li>
+<li><strong>CI 与本地执行差异确认</strong>：
+   查验 <a href="/hanalice/file:///workspace/demo/.github/workflows/ci.yml#L23">.github/workflows/ci.yml:L23</a>，确认 CI 跑的是 <code>npm ci</code>。在本地运行 <code>npm ci</code> 将本地 <code>node_modules</code> 强行拉回与 <code>package-lock.json</code> 一致后，本地 <code>npm run build</code> 瞬间构建成功（耗时 <strong>399ms</strong>）。</li>
+</ol>
+<hr />
+<h2>4. 官方修补状态跟踪 (Official Fix Status)</h2>
+<p>针对最新发行的 <strong><code>rolldown@1.2.3</code></strong> npm 包进行了实际源码抽查分析：</p>
+<ol>
+<li><strong>JS 侧格式化防护校验</strong>：
+   在 <code>rolldown@1.2.3</code> 的 <a href="/hanalice/file:///workspace/demo/node_modules/rolldown/dist/shared/error-BzLGqhSQ.mjs#L25">error-BzLGqhSQ.mjs:25</a> 源码中：
+   <code>javascript
+   function normalizeBindingError(e) {
+       return e.type === "JsError" ? e.field0 : Object.assign(...);
+   }</code>
+   <strong>结论</strong>：<code>normalizeBindingError</code> 针对 <code>JsError</code> 返回值的空指针防护补丁<strong>尚未在 1.2.3 正式包中完全打入</strong>。若底层抛出结构不全的 <code>JsError</code>，依然存在格式化二次崩溃风险。</li>
+<li><strong>实践结论</strong>：
+   由于 Rolldown 处于快速演进期（NAPI 绑定层不断更新），目前在生产环境中锁定 <strong>Vite <code>8.0.0</code></strong> 依然是保障构建 100% 稳定的最优解。</li>
+</ol>
+<hr />
+<h2>5. 修复与预防方案 (Resolution &amp; Prevention)</h2>
+<h3>方案 A：恢复本地开发环境对齐（已被验证）</h3>
+<p>在本地终端执行与 CI 完全一致的清洁安装命令：</p>
+<pre><code class="language-bash">npm ci
+npm run build
+</code></pre>
+<p>保证本地 <code>node_modules</code> 严格使用 <a href="/hanalice/file:///workspace/demo/package-lock.json">package-lock.json</a> 锁定的 Vite <code>8.0.0</code> 版本。</p>
+<h3>方案 B：避免未来的次版本版本漂移（推荐做法）</h3>
+<p>将 <a href="/hanalice/file:///workspace/demo/package.json">package.json</a> 中的版本声明从兼容模式修改为精确模式：</p>
+<pre><code class="language-diff">- &quot;vite&quot;: &quot;^8.0.0&quot;
++ &quot;vite&quot;: &quot;8.0.0&quot;
+</code></pre>
+<p>确保团队成员或依赖工具在不小心运行 <code>npm install</code> 时不会意外触发从 8.0.0 到 8.2.x 的自动升级。</p>
+<h3>规范总结</h3>
+<ul>
+<li><strong>开发与 CI 流程规范</strong>：在日常开发与 CI 流程中，安装依赖优先使用 <code>npm ci</code> 而非 <code>npm install</code>。</li>
+<li><strong>锁定 lockfile</strong>：确保提交的 <a href="/hanalice/file:///workspace/demo/package-lock.json">package-lock.json</a> 完整性，禁止手动删除或不匹配修改。</li>
+</ul>
+<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</article>
+</main>
+<footer class="site-footer">
+  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+</footer>
+</body>
+</html>

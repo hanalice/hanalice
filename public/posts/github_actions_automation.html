@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极简主义艺术：基于 GitHub Actions 的静态个人门户自动化体系 · hanalice</title>
+<meta name="description" content="在当今各种重量级 Web 框架（如 React, Next.js）和各种付费云服务器盛行的时代，你是否想过回归极简主义？用纯粹的 Markdown 配合 GitHub 原生功能，零服务器成本，打造一个轻量、优雅、有灵魂的技术“个人名片”兼“博客门户”？">
+<link rel="canonical" href="https://hanalice.github.io/hanalice/posts/github_actions_automation.html">
+<meta property="og:title" content="极简主义艺术：基于 GitHub Actions 的静态个人门户自动化体系 · hanalice">
+<meta property="og:description" content="在当今各种重量级 Web 框架（如 React, Next.js）和各种付费云服务器盛行的时代，你是否想过回归极简主义？用纯粹的 Markdown 配合 GitHub 原生功能，零服务器成本，打造一个轻量、优雅、有灵魂的技术“个人名片”兼“博客门户”？">
+<meta property="og:url" content="https://hanalice.github.io/hanalice/posts/github_actions_automation.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="hanalice">
+<link rel="stylesheet" href="/hanalice/assets/site.css">
+
+</head>
+<body>
+<header class="site-header">
+  <a class="site-title" href="/hanalice/">hanalice</a>
+</header>
+<main class="site-main">
+<article>
+<h1>极简主义艺术：基于 GitHub Actions 的静态个人门户自动化体系</h1>
+<p class="post-meta"><time datetime="2017-07-01">2017-07-01</time> · <ul class="tags"><li>#DevOps</li><li>#Git</li><li>#Automation</li></ul></p>
+<p>在当今各种重量级 Web 框架（如 React, Next.js）和各种付费云服务器盛行的时代，你是否想过回归极简主义？用纯粹的 Markdown 配合 GitHub 原生功能，零服务器成本，打造一个轻量、优雅、有灵魂的技术“个人名片”兼“博客门户”？</p>
+<p>本篇文章将带你深入探究我这个 GitHub Profile 个人主页背后的全自动化构建与运维体系，看看我们是如何用一个轻量级 Python 脚本和 GitHub Actions，实现博文自动同步、分类标签重构以及每日像素小人趣味轮换的。</p>
+<hr />
+<h2>🎨 1. 为什么选择“数据驱动的 README”？</h2>
+<p>在 GitHub 上，我们的 Profile README 是个人的技术门面。但如果每次写完新博客，都要手动去修改 <code>README.md</code> 中的文章列表、标签云，不仅极其繁琐，还容易产生格式错乱。</p>
+<p>因此，本项目采用了 <strong>“单一数据源 (Single Source of Truth)”</strong> 的设计模式：
+- <strong>只编辑模板</strong>：我们只维护结构固定的 <code>README.template.md</code>，它包含主页的静态介绍以及若干个特殊的 HTML 注释占位符（例如 <code>&lt;!-- BLOG-POST-LIST:START --&gt;</code>）。
+- <strong>自动化编译</strong>：通过后台脚本读取 <code>/posts</code> 目录下的所有文章，并自动将数据渲染、注入到占位符中，最终生成不可手动编辑的 <code>README.md</code>。</p>
+<p>这种“数据与表现分离”的理念，是本系统能够 100% 自动化的工程基石。</p>
+<hr />
+<h2>🛠️ 2. 自动化体系的三大支柱</h2>
+<p>整个自动化运维工作流由三个专职的 GitHub Actions 共同承载：</p>
+<h3>支柱一：定时与事件双触发的同步核心 (<code>blog-sync.yml</code>)</h3>
+<p>为了让门户主页保持源源不断的生命力，构建工作流在两种场景下会被自动唤醒：
+1. <strong>主动触发</strong>：只要我们在本地写完文章，用 Git 推送（Push）到 <code>posts/</code> 目录时，工作流会立刻识别并启动，在数秒内更新主页。
+2. <strong>被动轮换</strong>：系统配置了每日凌晨零点（UTC）执行的 <code>cron</code> 定时器。即使我们没有写新博文，定时器也会唤醒系统，重新轮换今日的像素小人（Pixel Mascot），保证访问者每天看到的都是不一样的小人。</p>
+<h3>支柱二：防止死循环的图片压缩 (<code>image-compress.yml</code>)</h3>
+<p>在极简设计中，图片加载速度至关重要。我们引入了自动压缩图片的 Actions 流程。然而在工程实践中，有一个经典的<strong>死循环黑洞</strong>：</p>
+<blockquote>
+<p>压缩图片 Action 执行完毕后，需要自动将压缩后的图片 commit 并 push 回仓库。但这会触发新的 push 事件，从而再次唤醒图片压缩流，导致无限死循环。</p>
+</blockquote>
+<p><strong>我们的解决方案</strong>：在自动 commit 时，显式地在 commit 消息中附带 <code>[skip ci]</code> 标记。GitHub 在收到该标记后会自动阻断后续的工作流触发，优雅地打破了无限循环链。</p>
+<h3>支柱三：自动巡检的死链检测 (<code>link-checker.yml</code>)</h3>
+<p>互联网上的链接随时可能失效。为了防止主页上的外部参考链接变成 404，每月 1 号系统会自动运行一次链接健康检查。一旦发现死链，它不会粗暴地让构建挂掉，而是会在仓库中自动提起一个 Issue 提醒我们去手动修复。这种“非阻断式警报”设计，大大提升了系统运行的鲁棒性。</p>
+<hr />
+<h2>🧩 3. 趣味点睛：无 Git 膨胀的每日像素小人轮换</h2>
+<p>主页顶部每天自动轮换的 Apple 极简风格像素小人是本项目的趣味担当。</p>
+<p>从工程角度来看，如果每次轮换都去覆写、commit 一个新的二进制图片文件，会导致 Git 历史中堆积大量无意义的二进制差异，使 <code>.git</code> 文件夹体积迅速膨胀。</p>
+<p>为了解决这个问题，我们的 Python 脚本在运行 <code>rotate_mascot()</code> 时采取了巧妙的双重设计：
+- <strong>物理文件安全隔离</strong>：在 <code>assets/mascots/</code> 目录下预置 10 张固定好的小人图片（<code>01.png</code> ~ <code>10.png</code>）。
+- <strong>动态链接注入</strong>：脚本通过替换模板中的 <code>{{DAILY_MASCOT}}</code> 占位符，动态指向当前抽中的小人文件名。只修改文本而不修改物理大图文件，使 Git 提交仅产生极小的文本改动，完美杜绝了仓库历史膨胀。</p>
+<hr />
+<h2>💡 4. 总结与启示</h2>
+<p>本项目的自动化体系用最轻量级的标准库和最原生的 GitHub 服务，构建起了一套闭环的技术门户 CMS 系统。它证明了：<strong>极简主义并不意味着功能的缺失，相反，它用最少的依赖，带来了最高的可靠性和最纯粹的阅读体验。</strong></p>
+<p>如果你也想拥有一套完全属于自己的、零运维成本的个人主页，不妨克隆本仓库，开启你的极简自动化之旅吧！</p>
+<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</article>
+</main>
+<footer class="site-footer">
+  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AngularJS中$http服务的简单用法 · hanalice</title>
+<meta name="description" content="我们可以使用内置的$http服务直接同外部进行通信。$http服务只是简单的封装了浏览器原生的XMLHttpRequest对象。">
+<link rel="canonical" href="https://hanalice.github.io/hanalice/posts/angular_http.html">
+<meta property="og:title" content="AngularJS中$http服务的简单用法 · hanalice">
+<meta property="og:description" content="我们可以使用内置的$http服务直接同外部进行通信。$http服务只是简单的封装了浏览器原生的XMLHttpRequest对象。">
+<meta property="og:url" content="https://hanalice.github.io/hanalice/posts/angular_http.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="hanalice">
+<link rel="stylesheet" href="/hanalice/assets/site.css">
+
+</head>
+<body>
+<header class="site-header">
+  <a class="site-title" href="/hanalice/">hanalice</a>
+</header>
+<main class="site-main">
+<article>
+<h1>AngularJS中$http服务的简单用法</h1>
+<p class="post-meta"><time datetime="2017-09-22">2017-09-22</time> · <ul class="tags"><li>#AngularJS</li><li>#Http</li></ul></p>
+<p>我们可以使用内置的$http服务直接同外部进行通信。$http服务只是简单的封装了浏览器原生的XMLHttpRequest对象。</p>
+<h3>链式调用</h3>
+<p>$http服务是只能接受一个参数的函数，这个参数是一个对象，包含了用来生成HTTP请求的
+配置内容。这个函数返回一个promise对象，具有success和error两个方法。相当于预定义两个方法，成功的时候执行什么，失败的时候执行什么，并不是同时执行的。</p>
+<pre><code>$http({
+url:'data.json',
+method:'GET'
+}).success(function(data,header,config,status){
+//响应成功
+
+}).error(function(data,header,config,status){
+//处理响应失败
+});
+</code></pre>
+<h3>可以将$http当做函数来使用，获取mockup的json数据</h3>
+<pre><code>$http({
+method:'GET',
+url:'/api/users.json',
+params:{
+'username':'tan'
+});
+</code></pre>
+<p>其中设置对象可以包含以下主要的键：<br />
+①method: GET/DELETE/HEAD/JSONP/POST/PUT<br />
+②url:绝对的或者相对的请求目标<br />
+③params(字符串map或者对象)
+这个键的值是一个字符串map或对象，会被转换成查询字符串追加在URL后面。如果值不是字符串，会被JSON序列化。
+比如这个：</p>
+<pre><code>调用$get方法：
+this.getUsers = function () {
+    var params = {'sex': &quot;male&quot;};
+    var config = (params) ? {'params': params} : {};
+    return apiService.get('/api/users/', config)
+    .error(function (data) {
+        toastService.add('error', gettext('Unable to retrieve users.'));
+    });
+};
+以上参数会转为？sex=male的形式
+</code></pre>
+<p>④data(字符串或者对象)
+这个对象中包含了将会被当作消息体发送给服务器的数据。通常在发送POST请求时使用。</p>
+<h3>响应对象</h3>
+<p>AngularJS传递给then（）方法的响应对象包含了四个属性。<br />
+◇data
+这个数据代表转换过后的响应体（如果定义了转换的话）<br />
+◇status
+响应的HTTP状态码<br />
+◇headers
+这个函数是头信息的getter函数，可以接受一个参数，用来获取对应名字值  </p>
+<p>例如，用如下代码获取X-Auth-ID的值：</p>
+<pre><code>$http({
+method: 'GET',
+url: '/api/users.json'
+}).then (resp) {
+// 读取X-Auth-ID
+resp.headers('X-Auth-ID');
+});
+</code></pre>
+<p>◇config
+这个对象是用来生成原始请求的完整设置对象。</p>
+<p>◇statusText（字符串）
+这个字符串是响应的HTTP状态文本。</p>
+<p><strong>success(), error()和then()的区别在于，success和error返回了处理过的数据，没有status和headers,只有具体的data对象</strong></p>
+<h3>缓存HTTP请求</h3>
+<p>默认情况下，$http服务不会对请求进行本地缓存。在发送单独的请求时，我们可以通过向$http请求传入一个布尔值或者一个缓存实例来启用缓存。</p>
+<pre><code>$http.get('/api/users.json',{ cache: true })
+.success(function(data) {})
+.error(function(data) {});
+</code></pre>
+<p>第一次发送请求时，$http服务会向/api/users.json发送一个GET请求。第二次发送同一个GET请求时，$http服务会从缓存中取回请求的结果，而不会真的发送一个HTTP GET请求。
+在这个例子里，由于设置了启用缓存，AngularJS默认会使用$cacheFactory,这个服务是AngularJS在启动时自动创建的。如果想要对AngularJS使用的缓存进行更多的自定义控制，可以向请求传入一个自定义的缓存实例代替true。</p>
+<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</article>
+</main>
+<footer class="site-footer">
+  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+</footer>
+</body>
+</html>

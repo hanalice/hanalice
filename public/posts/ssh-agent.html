@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>使用ssh-agent 管理多个ssh key · hanalice</title>
+<meta name="description" content="查看代理">
+<link rel="canonical" href="https://hanalice.github.io/hanalice/posts/ssh-agent.html">
+<meta property="og:title" content="使用ssh-agent 管理多个ssh key · hanalice">
+<meta property="og:description" content="查看代理">
+<meta property="og:url" content="https://hanalice.github.io/hanalice/posts/ssh-agent.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="hanalice">
+<link rel="stylesheet" href="/hanalice/assets/site.css">
+
+</head>
+<body>
+<header class="site-header">
+  <a class="site-title" href="/hanalice/">hanalice</a>
+</header>
+<main class="site-main">
+<article>
+<h1>使用ssh-agent 管理多个ssh key</h1>
+<p class="post-meta"><time datetime="2017-08-07">2017-08-07</time> · <ul class="tags"><li>#SSH</li><li>#Git</li><li>#Agent</li></ul></p>
+<pre><code>举例当前用户为test_1 和 hanalice
+</code></pre>
+<h3>查看代理</h3>
+<pre><code>ssh-add -l
+如果出现以下结果，说明系统代理里面没有任何key
+view plain copy
+Could not open a connection to your authentication agent.
+执行如下操作：
+exec ssh-agent bash
+如果系统已经有ssh-key 代理，可以直接删除
+ssh-add -D
+</code></pre>
+<h3>添加私钥</h3>
+<pre><code>ssh-add ~/.ssh/id_rsa  
+ssh-add ~/.ssh/id_rsa_github
+</code></pre>
+<h3>添加公钥</h3>
+<pre><code>在对应的gitlab和github的ssh管理页面，添加对应的公钥（.pub 文件内容），保存到代码管理服务器。
+</code></pre>
+<h3>编辑或者添加~/.ssh/config 文件</h3>
+<pre><code># github
+Host github.com
+    HostName github.com
+    PreferredAuthentications publickey
+    IdentityFile ~/.ssh/id_rsa_github
+    user hanalice
+
+# gitlab
+Host gitlab.com
+    HostName gitlab.com
+    PreferredAuthentications publickey
+    IdentityFile ~/.ssh/id_rsa
+    user test_1
+</code></pre>
+<h3>验证repository是否通过权限验证</h3>
+<pre><code>ssh -T git@github.com
+如果出现以下结果，表明成功
+Hi XXX! You've successfully authenticated, but GitHub does not provide shell access.  
+如果出现以下结果，请检查github的ssh管理里添加的公钥是否正确
+permission denied (publickey)
+</code></pre>
+<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</article>
+</main>
+<footer class="site-footer">
+  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+</footer>
+</body>
+</html>

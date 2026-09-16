@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用 · hanalice</title>
+<meta name="description" content="1. 问题现象 Problem Symptoms">
+<link rel="canonical" href="https://hanalice.github.io/hanalice/posts/mcp_tool_design_valid_but_wrong.html">
+<meta property="og:title" content="MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用 · hanalice">
+<meta property="og:description" content="1. 问题现象 Problem Symptoms">
+<meta property="og:url" content="https://hanalice.github.io/hanalice/posts/mcp_tool_design_valid_but_wrong.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="hanalice">
+<link rel="stylesheet" href="/hanalice/assets/site.css">
+
+</head>
+<body>
+<header class="site-header">
+  <a class="site-title" href="/hanalice/">hanalice</a>
+</header>
+<main class="site-main">
+<article>
+<h1>MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用</h1>
+<p class="post-meta"><time datetime="2026-09-15">2026-09-15</time> · <ul class="tags"><li>#Agent</li><li>#MCP</li><li>#Tool-Calling</li><li>#Schema</li><li>#Context-Engineering</li></ul></p>
+<h2>1. 问题现象 (Problem Symptoms)</h2>
+<p>给 Agent 接上 MCP Server 之后，最常见的失败形态不是「参数校验挂了」，而是：<strong>调用在 schema 层面完全合法，在业务层面完全错误</strong>。</p>
+<p>Zod / JSON Schema 绿灯，JSON-RPC 也没抛协议错误，但结果已经偏了。这类 failure 难排查：日志里看不到 malformed payload，只有一串 well-formed wrong。</p>
+<h3>现象 A：选错工具——<code>update</code> 当 <code>send</code></h3>
+<p>你暴露了 <code>update_invoice</code> 和 <code>send_invoice</code>。用户说「把这张发票发出去」。两份 description 语义重叠，模型选了 <code>update_invoice({ status: "sent" })</code>，以为改了状态就等于寄出了 PDF。每个参数都合法，邮件从未发出。</p>
+<h3>现象 B：合法字符串，错误枚举——<code>region</code> 自由文本</h3>
+<p>字段类型是 <code>region: string</code>。同一次任务里，模型可能写出 <code>"Canary Islands"</code>、<code>"canarias"</code>、<code>"ES-CN"</code>、<code>"islas canarias"</code>。全部是合法 string；税务引擎只认其中一个 canonical token。</p>
+<h3>现象 C：超时重试导致双写</h3>
+<p><code>create_order</code> 超时。错误是一坨 stringified <code>500</code> / <code>timeout</code>，模型分不清「已落库但响应丢了」和「根本没写成功」，于是换个参数再调一次——双写。idempotency key 没进 schema，retry 变成了 side effect amplifier。</p>
+<h3>伴随症状：Context Bloat</h3>
+<p>多个 MCP Server 一挂上，工具定义在用户开口前就占满 context。推理能力下降 → 更差的工具选择 → 更多重试 → context 继续膨胀。Confusion 与 Bloat 互相喂养。</p>
+<pre><code class="language-mermaid">flowchart LR
+  A[工具定义塞满 context] --&gt; B[推理退化]
+  B --&gt; C[选错工具 / 填错参数]
+  C --&gt; D[重试与无效结果回流]
+  D --&gt; A
+</code></pre>
+<hr />
+<h2>2. 根因分析 (Root Cause Analysis)</h2>
+<p>AWS 对 MCP 工具失效的归纳很干脆：<strong>Confusion + Bloat</strong>。协议本身很少是罪魁；多数团队把现有 REST API 原样 wrap 成 tool，指望模型「自己看懂」。</p>
+<ul>
+<li><strong>Bloat</strong>：工具定义每轮都进 context，无论用不用。多 Server 叠加后，上下文在第一轮提问前就已稀缺。</li>
+<li><strong>Confusion</strong>：推理变差后，模型更容易选错工具、填错参数；语义相近的工具名、开放字符串、模糊 description 再放大错误；重试继续喂大 bloat。</li>
+</ul>
+<p>这不是 input-validation bug，而是 <strong>interface design bug</strong>。Frihet 一文把「schema 通过但行为错误」拆成四类 misuse：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>典型表现</th>
+<th>根因杠杆</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wrong tool</td>
+<td>该 <code>send</code> 却调了 <code>update</code></td>
+<td>description 不互斥 / 工具边界模糊</td>
+</tr>
+<tr>
+<td>Valid-but-wrong arg</td>
+<td><code>region</code> 自由字符串变体</td>
+<td>开放类型允许非法状态可表示</td>
+</tr>
+<tr>
+<td>Wrong order / precondition</td>
+<td>未 finalize 就开 credit note</td>
+<td>缺少状态前置条件与可行动错误</td>
+</tr>
+<tr>
+<td>Can't recover</td>
+<td>stringified 500，盲目重试或放弃</td>
+<td>错误不可分支；写操作无幂等键</td>
+</tr>
+</tbody>
+</table>
+<p>经验研究也在侧面印证「描述层」问题的普遍性：对 103 个 MCP Server、856 个工具的扫描显示，<strong>约 97.1% 的工具描述至少带有一种 smell</strong>，其中约 56% 甚至未能清楚陈述用途（Unclear Purpose）。描述增强能抬升成功率，但也可能让执行步数暴涨——又一次撞上 Confusion vs Bloat 的权衡。</p>
+<hr />
+<h2>3. 协议要点：description 是路由契约 (Protocol Notes)</h2>
+<p>MCP Tools 规范里，工具靠 <code>name</code> + <code>description</code> + <code>inputSchema</code>（以及可选的 <code>outputSchema</code> / <code>annotations</code>）被模型发现和调用。对 Agent 而言，<strong>description 不是注释，而是路由契约</strong>：模型几乎只靠它决定「调谁」。两份 description 都能回答「发送这张发票」，就是你发到生产上的 routing bug。</p>
+<h3>Protocol Error vs Tool Execution Error</h3>
+<p>Agent 调工具时，失败对应规范里的两种 <strong>error reporting mechanism</strong>：</p>
+<ol>
+<li><strong>电话没打通</strong> → <strong>Protocol Error</strong>（协议错误：JSON-RPC 响应里的 <code>error</code>）</li>
+<li><strong>电话打通了，但事没办成</strong> → <strong>Tool Execution Error</strong>（工具执行错误：JSON-RPC <code>result</code> 里 <code>isError: true</code>）</li>
+</ol>
+<p>模型主要吃 Tool Execution Error 里的文字；Protocol Error 常常停在 Host，模型只感觉「调用失败了」，不一定看得到你写的业务文案。</p>
+<h4>调用实际长什么样</h4>
+<p>简化成两次往返：</p>
+<ol>
+<li>Host（Cursor 等）按 JSON-RPC 把 <code>tools/call</code> 发给 MCP Server</li>
+<li>Server 要么：</li>
+<li><strong>拒收这次请求</strong> → 回 JSON-RPC <strong>error</strong>（Protocol Error）</li>
+<li><strong>接受并执行了工具</strong> → 回 <strong>result</strong>；若业务失败，result 里带 <code>isError: true</code> + 说明文字</li>
+</ol>
+<h4>Protocol Error：电话没打通</h4>
+<p>典型原因：未知工具名；参数不符合 schema（该 number 给了 string、缺必填、枚举外的值）；服务端协议级故障。</p>
+<p>返回的是 JSON-RPC 错误对象（常见如 <code>-32602</code> Invalid params），<strong>不是</strong>「工具跑完后的业务结果」。</p>
+<p>例子：schema 规定 <code>clientLocation</code> 只能是 <code>"peninsula" | "canarias" | ...</code>，模型却传了 <code>"Canary Islands"</code>。若 Host/Server 严格校验，会在进业务逻辑之前被协议层打回。模型可能只知道「参数无效」，不一定看到精心写的业务恢复指引。</p>
+<h4><code>isError: true</code>：电话通了，事没办成</h4>
+<p>工具函数已经执行了，但任务失败，例如：发票还没 finalize；上游 API 限流；库存不足、权限不够。</p>
+<p>这时协议含义是：这次 <code>tools/call</code> <strong>成功完成了一次工具调用</strong>，但结果标记为错误。这段内容会回到模型上下文，所以应当写成<strong>可行动指令</strong>：</p>
+<ul>
+<li>差：<code>"Error 500"</code> / <code>"failed"</code></li>
+<li>好：<code>"发票 INV-1024 尚未 finalize，请先调用 finalize_invoice，再开 credit note"</code></li>
+</ul>
+<h4>为什么必须分开用（别混用）</h4>
+<p><strong>别把业务前置失败塞进 Protocol Error（例如硬塞 <code>-32602</code>）</strong></p>
+<p>「还没 finalize」不是「参数类型错了」，是世界状态不对。塞进协议错误 → Host 当非法请求处理，模型往往拿不到「请先 finalize」这种恢复路径。正确：参数合法、工具已执行 → 用 <code>isError: true</code> + 明确下一步。</p>
+<p><strong>别把「参数类型明显错了」只写成散文式 <code>isError</code></strong></p>
+<p><code>"age": "十八"</code> 这种本该 schema 在门口拦住。若放进工具里再返回「age 必须是数字」：浪费了 schema 自动约束，多跑一轮工具，还可能让模型继续用同义写法猜。正确：能用 enum / number / required 在协议层挡的，就挡在协议层。</p>
+<p>一句话：</p>
+<blockquote>
+<p><strong>形状不对 → Protocol Error（schema）</strong><br />
+<strong>形状对、但事办不成 → isError（给模型看的业务反馈）</strong></p>
+</blockquote>
+<h4>同一场景串起来</h4>
+<p>目标：给客户开 credit note。</p>
+<ol>
+<li>模型调用 <code>create_credit_note({ invoiceId: "INV-1" })</code>，参数类型都对。</li>
+<li>Server 查库：发票还是 draft。</li>
+<li><strong>应返回</strong> result + <code>isError: true</code>：<code>"INV-1 仍是 draft，请先 finalize_invoice(\"INV-1\")"</code>。</li>
+<li>模型下轮去调 <code>finalize_invoice</code>。</li>
+</ol>
+<p>若第 3 步改成抛 JSON-RPC <code>-32602</code>：Host 可能只报 Invalid params，模型不知道要先 finalize。<br />
+反过来：模型传 <code>invoiceId: 12345</code>（该是 string）→ 应用 Protocol Error / schema 拒绝，不必进业务代码。</p>
+<p>这和全文主题的关系：「合法但错误」多半指过了 schema（协议层绿灯），业务上却选错工具 / 填错语义 / 顺序不对。那种失败要靠更好的 description / enum 减少走进死胡同，以及走进去之后用清晰的 <code>isError</code> 文案把模型拉回来——而不是全部打成 Protocol Error，也不是全部变成一句糊里糊涂的 500。</p>
+<h3>Annotations 是提示，不是安全边界</h3>
+<p><code>readOnlyHint</code> / <code>destructiveHint</code> / <code>idempotentHint</code> / <code>openWorldHint</code> 让 Host 可以对读操作自动放行、对破坏性写操作要求人工确认。规范明确：<strong>clients MUST consider tool annotations to be untrusted unless they come from trusted servers</strong>。真实鉴权、对象级授权、幂等与速率限制必须落在 Server 侧；annotation 只能缩小 blast radius，不能替代 enforcement。</p>
+<p>它们定义在 <strong>Tool</strong> 对象的可选字段 <code>annotations</code>（类型 <strong>ToolAnnotations</strong>）：<code>tools/list</code> 的返回值里，与 <code>name</code> / <code>description</code> / <code>inputSchema</code> 同级。见 <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools</a> 与 <a href="https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations">schema：<code>Tool</code> / <code>ToolAnnotations</code></a>。<code>tools/call</code> 的请求/结果里没有这份结构。</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;get_invoice&quot;,
+  &quot;description&quot;: &quot;Fetch an invoice by id. Read-only.&quot;,
+  &quot;inputSchema&quot;: {
+    &quot;type&quot;: &quot;object&quot;,
+    &quot;properties&quot;: { &quot;invoiceId&quot;: { &quot;type&quot;: &quot;string&quot; } },
+    &quot;required&quot;: [&quot;invoiceId&quot;]
+  },
+  &quot;annotations&quot;: {
+    &quot;title&quot;: &quot;Get invoice&quot;,
+    &quot;readOnlyHint&quot;: true,
+    &quot;openWorldHint&quot;: false
+  }
+}
+</code></pre>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;void_invoice&quot;,
+  &quot;description&quot;: &quot;Permanently void an invoice. Not reversible.&quot;,
+  &quot;inputSchema&quot;: {
+    &quot;type&quot;: &quot;object&quot;,
+    &quot;properties&quot;: { &quot;invoiceId&quot;: { &quot;type&quot;: &quot;string&quot; } },
+    &quot;required&quot;: [&quot;invoiceId&quot;]
+  },
+  &quot;annotations&quot;: {
+    &quot;title&quot;: &quot;Void invoice&quot;,
+    &quot;readOnlyHint&quot;: false,
+    &quot;destructiveHint&quot;: true,
+    &quot;idempotentHint&quot;: true,
+    &quot;openWorldHint&quot;: false
+  }
+}
+</code></pre>
+<p>省略某 hint 时走规范默认值（<code>readOnlyHint</code> 默认 <code>false</code>，<code>destructiveHint</code> 默认 <code>true</code>）。缺字段不等于「安全」。</p>
+<hr />
+<h2>4. 设计演进：V1 → V4 与 BAD / GOOD Schema (Design Evolution)</h2>
+<p>AWS 用同一套 K-12 内容搜索后端对照了多种工具设计。这里收敛到工程上最常落地的四档（对应其 V1–V4），并给出可直接改代码的 schema 对照。</p>
+<table>
+<thead>
+<tr>
+<th>版本</th>
+<th>做法</th>
+<th>对 Confusion</th>
+<th>对 Bloat</th>
+<th>主要代价</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V1 Passthrough</td>
+<td>API 原样暴露，一行 docstring</td>
+<td>极差：无合法值、无同义映射</td>
+<td>定义很瘦</td>
+<td>重试与空结果把真实成本打爆</td>
+</tr>
+<tr>
+<td>V2 Rich descriptions</td>
+<td>docstring 写清合法值与同义词；砍冷门参数；错误带指引</td>
+<td>明显下降</td>
+<td>定义变胖</td>
+<td>每轮都付描述税，多 Server 时更痛</td>
+</tr>
+<tr>
+<td>V3 Schema + defaults</td>
+<td>重命名贴近领域；enum / defaults；拆 detail 工具</td>
+<td>进一步下降（协议层约束）</td>
+<td>通常比 V2 更瘦</td>
+<td>需重构参数模型</td>
+</tr>
+<tr>
+<td>V4 Lazy taxonomy</td>
+<td>搜索工具只留短 hint；<code>get_taxonomy</code> 按需加载</td>
+<td>歧义查询可先查再搜</td>
+<td>基线最瘦</td>
+<td>多一次 round-trip；简单查询可能跳过</td>
+</tr>
+</tbody>
+</table>
+<p>后续还有 Server 侧 introspection（自选小模型解释自然语言 → 推荐 filter）以及 Agent-as-tool（单一自然语言入口，内部自有工具编排）。准确率与一致性更高，但推理成本与延迟归你承担——适合「必须跨客户端模型稳定」的场景。本文聚焦多数团队会先走完的 V1→V4。</p>
+<h3>BAD：开放字符串 + 重叠描述</h3>
+<pre><code class="language-typescript">// ❌ 合法但错误的温床
+server.tool(
+  &quot;update_invoice&quot;,
+  &quot;Update or send an invoice&quot;, // 与 send_invoice 重叠
+  {
+    invoiceId: z.string(),
+    status: z.string().optional(),
+    region: z.string().optional(), // &quot;Canary Islands&quot; | &quot;canarias&quot; | &quot;ES-CN&quot;...
+  },
+  async (args) =&gt; { /* ... */ },
+);
+
+server.tool(
+  &quot;send_invoice&quot;,
+  &quot;Send invoice to customer&quot;, // 模型仍可能觉得 update 也能「发出去」
+  { invoiceId: z.string() },
+  async (args) =&gt; { /* ... */ },
+);
+</code></pre>
+<p>对应的 JSON Schema 同样「看起来没问题」：</p>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;properties&quot;: {
+    &quot;invoiceId&quot;: { &quot;type&quot;: &quot;string&quot; },
+    &quot;region&quot;: { &quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;Customer region&quot; }
+  },
+  &quot;required&quot;: [&quot;invoiceId&quot;]
+}
+</code></pre>
+<h3>GOOD：互斥描述 + 关闭非法状态 + 默认值</h3>
+<pre><code class="language-typescript">// ✅ 让非法状态不可表示；让路由互斥
+server.tool(
+  &quot;update_invoice&quot;,
+  &quot;Update draft invoice fields only. Does NOT email or finalize. Use send_invoice to deliver.&quot;,
+  {
+    invoiceId: z.string().uuid(),
+    clientLocation: z
+      .enum([&quot;peninsula&quot;, &quot;canarias&quot;, &quot;ceuta_melilla&quot;, &quot;eu&quot;, &quot;world&quot;])
+      .optional()
+      .describe(&quot;Fiscal zone driving IVA vs IGIC vs exempt&quot;),
+    operationType: z.enum([&quot;service&quot;, &quot;goods&quot;]).optional(),
+    irpfRate: z.number().min(0).max(100).optional(),
+  },
+  async (args) =&gt; { /* ... */ },
+);
+
+server.tool(
+  &quot;send_invoice&quot;,
+  &quot;Email the finalized PDF to the client. Requires invoice status=finalized. Not for drafting edits.&quot;,
+  {
+    invoiceId: z.string().uuid(),
+    idempotencyKey: z.string().min(8).describe(&quot;Stable key; retries must reuse the same value&quot;),
+  },
+  async (args) =&gt; { /* ... */ },
+);
+</code></pre>
+<p>相对上面的 GOOD，<strong>V3</strong> 要做的是：把 REST/DB 列名改成领域名、用 enum / default 去掉猜测、冷门字段拆到详情工具。仍用 <code>update_invoice</code>：</p>
+<pre><code class="language-typescript">// V1 Passthrough：API 原样，模型只能猜
+{
+  invoice_id: z.string(),
+  region: z.string().optional(),       // &quot;Canary Islands&quot; | &quot;canarias&quot; | &quot;ES-CN&quot;
+  op_type: z.string().optional(),
+  notes_internal: z.string().optional(),
+  pdf_template_id: z.string().optional(),
+}
+
+// V3 Schema + defaults：非法值进不了协议层
+{
+  invoiceId: z.string().uuid(),        // 原 invoice_id
+  clientLocation: z
+    .enum([&quot;peninsula&quot;, &quot;canarias&quot;, &quot;ceuta_melilla&quot;, &quot;eu&quot;, &quot;world&quot;])
+    .default(&quot;peninsula&quot;)
+    .describe(&quot;Was: region. Fiscal zone for IVA vs IGIC vs exempt.&quot;),
+  operationType: z.enum([&quot;service&quot;, &quot;goods&quot;]).default(&quot;service&quot;), // 原 op_type
+  // 去掉 notes_internal / pdf_template_id；详情走 get_invoice
+}
+</code></pre>
+<p><code>send_invoice</code> 同样：只留 <code>invoiceId</code> + <code>idempotencyKey</code>，发信相关的冷门选项不进这个工具。</p>
+<p><strong>V4</strong> 则把「合法值大表」挪出 always-loaded 定义，需要时再拉：</p>
+<pre><code class="language-typescript">// V4: 更新工具只留短 hint；taxonomy 按需加载
+server.tool(
+  &quot;update_invoice&quot;,
+  &quot;Update draft invoice fields only. Does NOT email or finalize. For valid fiscal zones, call get_fiscal_taxonomy first.&quot;,
+  {
+    invoiceId: z.string().uuid(),
+    clientLocation: z.string().optional().describe(&quot;e.g. peninsula, canarias&quot;),
+    operationType: z.enum([&quot;service&quot;, &quot;goods&quot;]).optional(),
+  },
+  updateHandler,
+);
+
+server.tool(
+  &quot;get_fiscal_taxonomy&quot;,
+  &quot;Return valid values and NL→canonical mappings for the requested invoice fields only.&quot;,
+  { fields: z.array(z.enum([&quot;clientLocation&quot;, &quot;operationType&quot;])) },
+  taxonomyHandler,
+);
+</code></pre>
+<p>经验法则（AWS Prescriptive Guidance 也提到）：单工具参数尽量控制在约 <strong>8 个以内</strong>；响应默认返回决策所需的少量字段，详情另开工具按需拉取（Anthropic 报告过按需详情可砍掉约三分之二 response token；Tool Search / 懒加载定义在大规模场景可把工具定义 token 降到约 15% 量级）。</p>
+<hr />
+<h2>5. 发工具前检查清单 (Pre-Ship Checklist)</h2>
+<p>注册任何一个 tool 之前，用四类 misuse 逐条过一遍：</p>
+<p><strong>Wrong tool</strong></p>
+<ul>
+<li>[ ] description 与邻居工具互斥，祈使句只陈述「这一件工作」</li>
+<li>[ ] 必要时显式写出 <em>does not</em>（例如「不发邮件」「不 finalize」）</li>
+<li>[ ] 用近邻 prompt（「发出去」「标记已发送」「更新状态」）做 confusion test</li>
+</ul>
+<p><strong>Valid-but-wrong argument</strong></p>
+<ul>
+<li>[ ] 领域只允许 N 个值时，schema 也只允许 N 个（enum / union / 数值上下界）</li>
+<li>[ ] 禁止「先靠 422 教育模型」——合法值必须在 discovery 时可见</li>
+<li>[ ] 参数名跟领域语言对齐，而不是跟 DB 列名对齐</li>
+<li>[ ] 常用值给 default，让模型只填「变化的部分」</li>
+</ul>
+<p><strong>Wrong order / precondition</strong></p>
+<ul>
+<li>[ ] 读工具返回当前状态 + 合法下一步（必要时带 version / ETag）</li>
+<li>[ ] 写工具在 Server 侧校验前置条件，失败时用 <code>isError</code> + 稳定 <code>errorCode</code> + 可行动文案</li>
+<li>[ ] 破坏性 / 外发副作用考虑 <code>plan_*</code> / <code>execute_*</code> 拆分</li>
+</ul>
+<p><strong>Can't recover + Bloat</strong></p>
+<ul>
+<li>[ ] 错误可分支：<code>rate_limit_exceeded</code> vs <code>validation_failed</code> vs <code>request_timeout</code>（后者提示「用同一 idempotency key 重试」）</li>
+<li>[ ] 非幂等 create 在 annotation 标 <code>idempotentHint: false</code>，并在 schema 要求 idempotency key</li>
+<li>[ ] annotation 仅作 Host 门控提示；鉴权与租户范围从 Server 会话推导，不信任模型传入的 tenantId</li>
+<li>[ ] 工具定义与默认响应是否在「够用」和「不挤爆 context」之间做过取舍；大词表是否可懒加载</li>
+</ul>
+<hr />
+<h2>6. 小结 (Takeaways)</h2>
+<p>「合法但错误」不是模型突然变笨，而是工具面把非法状态留在了可表示空间里，又把路由信息写得像两份能互相替代的文档。</p>
+<ul>
+<li><strong>Confusion + Bloat</strong> 是主矛盾：加描述能降 confusion，也会加 bloat；用 schema/enum/defaults 往往能同时改善两者。</li>
+<li><strong>description 是路由契约</strong>；协议错误与 <code>isError</code> 分工不同；annotations 是 hint，不是 ACL。</li>
+<li><strong>演进路径</strong>清楚：Passthrough → Rich descriptions → Schema+defaults → Lazy taxonomy；再往上才是 introspection / agent-as-tool。</li>
+<li><strong>发工具前清单</strong>对准四类 misuse；typed input 挡的是垃圾，constrained surface 挡的才是 misuse。</li>
+</ul>
+<p>下一篇会落到两件更「运行时」的事：<strong>trajectory eval</strong>（用近邻任务集量化 wrong-tool / wrong-arg 率，而不是只看单次 demo），以及 <strong>idempotency</strong>（超时、扇出、重试下如何保证写操作只生效一次）。没有这两者，再漂亮的 schema 也会在生产里被双写打穿。</p>
+<hr />
+<h2>参考 (References)</h2>
+<ol>
+<li>Daniel Wells, Raian Osman — <a href="https://aws.amazon.com/blogs/machine-learning/mcp-tool-design-practical-approaches-and-tradeoffs/">MCP tool design: Practical approaches and tradeoffs</a> (AWS Machine Learning Blog, 2026-07-09). Confusion / Bloat 框架与 V1–V6 对照。</li>
+<li>berthelius (Frihet) — <a href="https://dev.to/frihet/designing-mcp-tools-an-agent-wont-misuse-1ah1">Designing MCP tools an agent won't misuse</a> (DEV, 2025-08-09). Well-formed wrong 与四类 misuse、enum 约束、annotations、typed errors。</li>
+<li>Model Context Protocol — <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools (specification 2025-06-18)</a>；<a href="https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations">JSON schema：<code>Tool</code> / <code>ToolAnnotations</code></a>. <code>tools/list</code> / <code>tools/call</code>、protocol error vs <code>isError</code>、annotations 不可单独作为安全依据。</li>
+<li>arXiv:2602.14878 — <a href="https://arxiv.org/html/2602.14878v1">Model Context Protocol (MCP) Tool Descriptions Are Smelly!</a>. 856 工具 / 103 Server；约 97.1% 描述含至少一种 smell；增强描述的收益与步数 / 回归代价。</li>
+</ol>
+<p class="back"><a href="/hanalice/">← Back to posts</a></p>
+</article>
+</main>
+<footer class="site-footer">
+  <p><a href="/hanalice/">Home</a> · <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
+</footer>
+</body>
+</html>
