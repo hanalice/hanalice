@@ -25,28 +25,8 @@
     </ul>
   </nav>
 </header>
-<main class="site-main">
+<main class="site-main site-main--with-toc">
 <div class="post-layout has-toc">
-<nav class="toc" aria-label="本文目录">
-<p class="toc-title">本文目录</p>
-<ol class="toc-list">
-<li class="toc-h2"><a href="#1-问题现象-problem-symptoms">1. 1. 问题现象 (Problem Symptoms)</a></li>
-<li class="toc-h3"><a href="#现象-a选错工具update-当-send">— 现象 A：选错工具——update 当 send</a></li>
-<li class="toc-h3"><a href="#现象-b合法字符串错误枚举region-自由文本">— 现象 B：合法字符串，错误枚举——region 自由文本</a></li>
-<li class="toc-h3"><a href="#现象-c超时重试导致双写">— 现象 C：超时重试导致双写</a></li>
-<li class="toc-h3"><a href="#伴随症状context-bloat">— 伴随症状：Context Bloat</a></li>
-<li class="toc-h2"><a href="#2-根因分析-root-cause-analysis">2. 2. 根因分析 (Root Cause Analysis)</a></li>
-<li class="toc-h2"><a href="#3-协议要点description-是路由契约-protocol-notes">3. 3. 协议要点：description 是路由契约 (Protocol Notes)</a></li>
-<li class="toc-h3"><a href="#protocol-error-vs-tool-execution-error">— Protocol Error vs Tool Execution Error</a></li>
-<li class="toc-h3"><a href="#annotations-是提示不是安全边界">— Annotations 是提示，不是安全边界</a></li>
-<li class="toc-h2"><a href="#4-设计演进v1-v4-与-bad-good-schema-design-evolution">4. 4. 设计演进：V1 → V4 与 BAD / GOOD Schema (Design Evolution)</a></li>
-<li class="toc-h3"><a href="#bad开放字符串-重叠描述">— BAD：开放字符串 + 重叠描述</a></li>
-<li class="toc-h3"><a href="#good互斥描述-关闭非法状态-默认值">— GOOD：互斥描述 + 关闭非法状态 + 默认值</a></li>
-<li class="toc-h2"><a href="#5-发工具前检查清单-pre-ship-checklist">5. 5. 发工具前检查清单 (Pre-Ship Checklist)</a></li>
-<li class="toc-h2"><a href="#6-小结-takeaways">6. 6. 小结 (Takeaways)</a></li>
-<li class="toc-h2"><a href="#参考-references">7. 参考 (References)</a></li>
-</ol>
-</nav>
 <article>
 <p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用</h1>
@@ -390,6 +370,26 @@ server.tool(
 </div>
 <p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h2"><a href="#1-问题现象-problem-symptoms">1. 问题现象 (Problem Symptoms)</a></li>
+<li class="toc-h3"><a href="#现象-a选错工具update-当-send">— 现象 A：选错工具——update 当 send</a></li>
+<li class="toc-h3"><a href="#现象-b合法字符串错误枚举region-自由文本">— 现象 B：合法字符串，错误枚举——region 自由文本</a></li>
+<li class="toc-h3"><a href="#现象-c超时重试导致双写">— 现象 C：超时重试导致双写</a></li>
+<li class="toc-h3"><a href="#伴随症状context-bloat">— 伴随症状：Context Bloat</a></li>
+<li class="toc-h2"><a href="#2-根因分析-root-cause-analysis">2. 根因分析 (Root Cause Analysis)</a></li>
+<li class="toc-h2"><a href="#3-协议要点description-是路由契约-protocol-notes">3. 协议要点：description 是路由契约 (Protocol Notes)</a></li>
+<li class="toc-h3"><a href="#protocol-error-vs-tool-execution-error">— Protocol Error vs Tool Execution Error</a></li>
+<li class="toc-h3"><a href="#annotations-是提示不是安全边界">— Annotations 是提示，不是安全边界</a></li>
+<li class="toc-h2"><a href="#4-设计演进v1-v4-与-bad-good-schema-design-evolution">4. 设计演进：V1 → V4 与 BAD / GOOD Schema (Design Evolution)</a></li>
+<li class="toc-h3"><a href="#bad开放字符串-重叠描述">— BAD：开放字符串 + 重叠描述</a></li>
+<li class="toc-h3"><a href="#good互斥描述-关闭非法状态-默认值">— GOOD：互斥描述 + 关闭非法状态 + 默认值</a></li>
+<li class="toc-h2"><a href="#5-发工具前检查清单-pre-ship-checklist">5. 发工具前检查清单 (Pre-Ship Checklist)</a></li>
+<li class="toc-h2"><a href="#6-小结-takeaways">6. 小结 (Takeaways)</a></li>
+<li class="toc-h2"><a href="#参考-references">7. 参考 (References)</a></li>
+</ol>
+</nav>
 </div>
 </main>
 <footer class="site-footer">

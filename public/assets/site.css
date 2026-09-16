@@ -311,35 +311,27 @@ article > h1 {
   padding-left: 1.15rem;
   font-size: 0.84rem;
 }
-@media (min-width: 1100px) {
-  .site-main:has(.post-layout.has-toc) {
-    max-width: 1120px;
-  }
+.site-main--with-toc {
+  max-width: 1180px;
+}
+@media (min-width: 960px) {
   .post-layout.has-toc {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 230px;
+    grid-template-columns: minmax(0, 1fr) 240px;
     gap: 2.25rem;
     align-items: start;
   }
   .post-layout.has-toc > .toc {
-    grid-column: 2;
-    grid-row: 1;
     position: sticky;
     top: 5rem;
     max-height: calc(100vh - 6rem);
     overflow-y: auto;
     align-self: start;
   }
-  .post-layout.has-toc > article {
-    grid-column: 1;
-    grid-row: 1;
-  }
 }
-@media (max-width: 1099px) {
-  .toc {
-    order: -1;
-  }
+@media (max-width: 959px) {
   .post-layout.has-toc > .toc {
+    order: -1;
     max-height: 14rem;
     overflow-y: auto;
   }

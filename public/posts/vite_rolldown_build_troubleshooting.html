@@ -25,26 +25,8 @@
     </ul>
   </nav>
 </header>
-<main class="site-main">
+<main class="site-main site-main--with-toc">
 <div class="post-layout has-toc">
-<nav class="toc" aria-label="本文目录">
-<p class="toc-title">本文目录</p>
-<ol class="toc-list">
-<li class="toc-h2"><a href="#1-问题现象-problem-symptoms">1. 1. 问题现象 (Problem Symptoms)</a></li>
-<li class="toc-h3"><a href="#现象-a本地-npm-run-build-运行时抛出未知错误">— 现象 A：本地 npm run build 运行时抛出未知错误</a></li>
-<li class="toc-h3"><a href="#现象-bgithub-actions-ci-与本地环境行为不一致">— 现象 B：GitHub Actions CI 与本地环境行为不一致</a></li>
-<li class="toc-h2"><a href="#2-根本原因分析-root-cause-analysis">2. 2. 根本原因分析 (Root Cause Analysis)</a></li>
-<li class="toc-h3"><a href="#原因一依赖版本漂移-version-drift">— 原因一：依赖版本漂移 (Version Drift)</a></li>
-<li class="toc-h3"><a href="#原因二rolldown-引擎的错误格式化二次崩溃bug-double-fault-in-rolldown">— 原因二：Rolldown 引擎的“错误格式化二次崩溃”Bug (Double-Fault in Rolldown)</a></li>
-<li class="toc-h3"><a href="#原因三跨项目对比为什么-vite-820-rolldown-122-的项目未报错">— 原因三：跨项目对比——为什么 Vite 8.2.0 + Rolldown 1.2.2 的项目未报错？</a></li>
-<li class="toc-h2"><a href="#3-排查思路与过程-troubleshooting-process">3. 3. 排查思路与过程 (Troubleshooting Process)</a></li>
-<li class="toc-h2"><a href="#4-官方修补状态跟踪-official-fix-status">4. 4. 官方修补状态跟踪 (Official Fix Status)</a></li>
-<li class="toc-h2"><a href="#5-修复与预防方案-resolution-prevention">5. 5. 修复与预防方案 (Resolution &amp; Prevention)</a></li>
-<li class="toc-h3"><a href="#方案-a恢复本地开发环境对齐已被验证">— 方案 A：恢复本地开发环境对齐（已被验证）</a></li>
-<li class="toc-h3"><a href="#方案-b避免未来的次版本版本漂移推荐做法">— 方案 B：避免未来的次版本版本漂移（推荐做法）</a></li>
-<li class="toc-h3"><a href="#规范总结">— 规范总结</a></li>
-</ol>
-</nav>
 <article>
 <p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">构建崩溃与 Lockfile 版本漂移排查</h1>
@@ -150,6 +132,24 @@ npm run build
 </div>
 <p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h2"><a href="#1-问题现象-problem-symptoms">1. 问题现象 (Problem Symptoms)</a></li>
+<li class="toc-h3"><a href="#现象-a本地-npm-run-build-运行时抛出未知错误">— 现象 A：本地 npm run build 运行时抛出未知错误</a></li>
+<li class="toc-h3"><a href="#现象-bgithub-actions-ci-与本地环境行为不一致">— 现象 B：GitHub Actions CI 与本地环境行为不一致</a></li>
+<li class="toc-h2"><a href="#2-根本原因分析-root-cause-analysis">2. 根本原因分析 (Root Cause Analysis)</a></li>
+<li class="toc-h3"><a href="#原因一依赖版本漂移-version-drift">— 原因一：依赖版本漂移 (Version Drift)</a></li>
+<li class="toc-h3"><a href="#原因二rolldown-引擎的错误格式化二次崩溃bug-double-fault-in-rolldown">— 原因二：Rolldown 引擎的“错误格式化二次崩溃”Bug (Double-Fault in Rolldown)</a></li>
+<li class="toc-h3"><a href="#原因三跨项目对比为什么-vite-820-rolldown-122-的项目未报错">— 原因三：跨项目对比——为什么 Vite 8.2.0 + Rolldown 1.2.2 的项目未报错？</a></li>
+<li class="toc-h2"><a href="#3-排查思路与过程-troubleshooting-process">3. 排查思路与过程 (Troubleshooting Process)</a></li>
+<li class="toc-h2"><a href="#4-官方修补状态跟踪-official-fix-status">4. 官方修补状态跟踪 (Official Fix Status)</a></li>
+<li class="toc-h2"><a href="#5-修复与预防方案-resolution-prevention">5. 修复与预防方案 (Resolution &amp; Prevention)</a></li>
+<li class="toc-h3"><a href="#方案-a恢复本地开发环境对齐已被验证">— 方案 A：恢复本地开发环境对齐（已被验证）</a></li>
+<li class="toc-h3"><a href="#方案-b避免未来的次版本版本漂移推荐做法">— 方案 B：避免未来的次版本版本漂移（推荐做法）</a></li>
+<li class="toc-h3"><a href="#规范总结">— 规范总结</a></li>
+</ol>
+</nav>
 </div>
 </main>
 <footer class="site-footer">
