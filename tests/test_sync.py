@@ -657,6 +657,7 @@ class TestArticleToc(unittest.TestCase):
         self.assertIn('class="toc"', html_out)
         self.assertIn('has-toc', html_out)
         self.assertIn('site-main--with-toc', html_out)
+        self.assertIn('has-toc-layout', html_out)
         self.assertIn('1. Alpha', html_out)
         self.assertIn('— Beta nested', html_out)
         self.assertIn('2. Gamma', html_out)
@@ -674,6 +675,7 @@ class TestArticleToc(unittest.TestCase):
         self.assertNotIn('本文目录', html_out)
         self.assertNotIn('has-toc', html_out)
         self.assertNotIn('site-main--with-toc', html_out)
+        self.assertNotIn('has-toc-layout', html_out)
 
     def test_no_double_numbering_when_heading_already_numbered(self):
         html_out = sync._render_post(self._post(
@@ -700,11 +702,26 @@ class TestArticleToc(unittest.TestCase):
             '— plain',
         )
 
+    def test_page_shell_aligns_nav_with_wide_toc_layout(self):
+        html_out = sync._page_shell(
+            title='t',
+            description='d',
+            canonical='https://example.test/p',
+            body_html='<p>x</p>',
+            main_class='site-main site-main--with-toc',
+            body_class='has-toc-layout',
+        )
+        self.assertIn('<body class="has-toc-layout">', html_out)
+        self.assertIn('site-main--with-toc', html_out)
+
     def test_site_css_has_toc_sidebar(self):
         self.assertIn('.toc', sync._SITE_CSS)
         self.assertIn('position: sticky', sync._SITE_CSS)
         self.assertIn('post-layout.has-toc', sync._SITE_CSS)
         self.assertIn('.site-main--with-toc', sync._SITE_CSS)
+        self.assertIn('--max-with-toc', sync._SITE_CSS)
+        self.assertIn('.has-toc-layout .site-nav', sync._SITE_CSS)
+        self.assertIn('.has-toc-layout .site-footer', sync._SITE_CSS)
         self.assertIn('minmax(0, 1fr) 240px', sync._SITE_CSS)
         self.assertIn('min-width: 960px', sync._SITE_CSS)
         self.assertNotIn(':has(.post-layout.has-toc)', sync._SITE_CSS)

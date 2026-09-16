@@ -1,7 +1,8 @@
 # GitHub Pages (static site from `public/`)
 
 `scripts/sync.py` exports a minimal static site to `public/` after updating README and tags.
-Deployment uses **GitHub Actions** (`.github/workflows/pages.yml`), not “Deploy from a branch”.
+`public/` is generated locally and in CI; it is **not** committed (see `.gitignore`).
+Deployment uses **GitHub Actions** (`.github/workflows/pages.yml`): the workflow runs `sync.py`, then uploads `public/` as a Pages artifact. Do not use “Deploy from a branch”.
 
 > GitHub’s branch deploy folder picker only offers `/` (root) and `/docs` — **not** `/public`.
 
@@ -9,7 +10,7 @@ Deployment uses **GitHub Actions** (`.github/workflows/pages.yml`), not “Deplo
 
 1. Open the repo **Settings → Pages**.
 2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-3. Re-run workflow **Deploy GitHub Pages** (Actions tab → workflow → Run workflow), or push any change under `public/`.
+3. Re-run workflow **Deploy GitHub Pages** (Actions tab → workflow → Run workflow), or push a change that rebuilds the site (`posts/`, `scripts/sync.py`, `assets/`).
 4. Site: **https://hanalice.github.io/hanalice/**
 5. Optional: submit `https://hanalice.github.io/hanalice/sitemap.xml` in [Google Search Console](https://search.google.com/search-console).
 
