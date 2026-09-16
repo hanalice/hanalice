@@ -26,11 +26,22 @@
   </nav>
 </header>
 <main class="site-main">
+<div class="post-layout has-toc">
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h3"><a href="#问题描述">— 问题描述</a></li>
+<li class="toc-h3"><a href="#问题定位">— 问题定位</a></li>
+<li class="toc-h3"><a href="#问题总结">— 问题总结</a></li>
+<li class="toc-h3"><a href="#延伸同项目中其他原生包为何没有出问题">— 延伸：同项目中其他原生包为何没有出问题</a></li>
+</ol>
+</nav>
 <article>
+<p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">pnpm 安装 rspack 原生 binding 缺失导致 build 失败</h1>
-<div class="post-meta"><time datetime="2026-08-08">2026-08-08</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/pnpm.html" data-tag="pnpm">#pnpm</a><a class="tag-chip" href="/hanalice/tags/rspack.html" data-tag="rspack">#rspack</a><a class="tag-chip" href="/hanalice/tags/native-binding.html" data-tag="native-binding">#native-binding</a><a class="tag-chip" href="/hanalice/tags/WSL.html" data-tag="WSL">#WSL</a><a class="tag-chip" href="/hanalice/tags/optional-dependencies.html" data-tag="optional-dependencies">#optional-dependencies</a></div></div>
+<div class="post-meta"><time datetime="2026-08-08">2026-08-08</time><span class="reading-time">4 分钟阅读</span><div class="tags"><a class="tag-chip" href="/hanalice/tags/pnpm.html" data-tag="pnpm">#pnpm</a><a class="tag-chip" href="/hanalice/tags/rspack.html" data-tag="rspack">#rspack</a><a class="tag-chip" href="/hanalice/tags/native-binding.html" data-tag="native-binding">#native-binding</a><a class="tag-chip" href="/hanalice/tags/WSL.html" data-tag="WSL">#WSL</a><a class="tag-chip" href="/hanalice/tags/optional-dependencies.html" data-tag="optional-dependencies">#optional-dependencies</a></div></div>
 <div class="prose">
-<h3>问题描述</h3>
+<h3 id="问题描述">问题描述</h3>
 <p>在 WSL（Ubuntu 24.04）环境下，使用 pnpm 在 monorepo 根目录执行 <code>pnpm install</code> 后，进入子包 <code>apps/1000</code> 执行 <code>npm run build:rspack</code>，报错如下：</p>
 <pre><code>Error: Cannot find native binding.
 Cannot find module './rspack.linux-x64-gnu.node'
@@ -55,7 +66,7 @@ Cannot find module '@rspack/binding-linux-x64-gnu'
 </code></pre>
 <p>依赖统一由根目录 <code>pnpm install</code> 管理，各子包通过 workspace 协议共享 <code>node_modules</code>。错误发生在 <code>@rspack/binding@2.1.7</code> 尝试加载原生 <code>.node</code> 二进制文件时，Node.js 进程直接抛出异常退出。</p>
 <hr />
-<h3>问题定位</h3>
+<h3 id="问题定位">问题定位</h3>
 <p><strong>定位过程：</strong></p>
 <ol>
 <li>
@@ -82,7 +93,7 @@ Cannot find module '@rspack/binding-linux-x64-gnu'
 <p>pnpm 未配置 <code>supportedArchitectures</code>，在 optional dependencies 处理路径上出现 bug，导致 <code>@rspack/binding-linux-x64-gnu</code> 的包内容（含 <code>.node</code> 二进制）始终未被下载，最终构建时找不到原生模块。</p>
 </blockquote>
 <hr />
-<h3>问题总结</h3>
+<h3 id="问题总结">问题总结</h3>
 <p><strong>修复方式：</strong> 在 <code>pnpm-workspace.yaml</code> 中添加 <code>supportedArchitectures</code> 配置，明确声明当前平台，再执行 <code>pnpm install</code>：</p>
 <pre><code class="language-yaml">supportedArchitectures:
   os:
@@ -117,7 +128,7 @@ Cannot find module '@rspack/binding-linux-x64-gnu'
 </tbody>
 </table>
 <hr />
-<h3>延伸：同项目中其他原生包为何没有出问题</h3>
+<h3 id="延伸同项目中其他原生包为何没有出问题">延伸：同项目中其他原生包为何没有出问题</h3>
 <p>本项目中多个工具（esbuild、@swc/core、lightningcss、rolldown、rollup）同样使用 <code>optionalDependencies</code> 分发跨平台原生二进制，但构建均正常。其原因分三类情况：</p>
 <h4>情况一：有 postinstall 兜底（esbuild、@swc/core）</h4>
 <p><code>pnpm-workspace.yaml</code> 中通过 <code>allowBuilds</code> 显式允许这两个包运行安装脚本：</p>
@@ -172,12 +183,38 @@ Cannot find module '@rspack/binding-linux-x64-gnu'
 <p>下次执行 <code>pnpm install</code> 时，由于目录已存在且 lockfile 未变，pnpm 误判为"已安装"并跳过，导致问题持续，而不会自动修复。</p>
 <p>配置 <code>supportedArchitectures</code> 后，pnpm 被迫重新评估平台 binding 包的安装状态，发现内容缺失，才触发了真正的下载补全。</p>
 </div>
-<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
+<p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+</div>
 </main>
 <footer class="site-footer">
   <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
-
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var map = {};
+  links.forEach(function (a) {
+    var id = decodeURIComponent(a.getAttribute('href').slice(1));
+    if (id) map[id] = a;
+  });
+  var headings = Object.keys(map).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var activeId = null;
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+    links.forEach(function (a) { a.classList.remove('active'); });
+    if (id && map[id]) map[id].classList.add('active');
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    var visible = entries.filter(function (e) { return e.isIntersecting; })
+      .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+    if (visible.length) setActive(visible[0].target.id);
+  }, { rootMargin: '-20% 0px -65% 0px', threshold: [0, 1] });
+  headings.forEach(function (h) { observer.observe(h); });
+})();
+</script>
 </body>
 </html>

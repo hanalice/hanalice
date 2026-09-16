@@ -18,7 +18,7 @@ PUBLIC_DIR = './public'
 SITE_BASE = 'https://hanalice.github.io/hanalice'
 BASE_PATH = '/hanalice'
 SITE_TITLE = 'hanalice'
-SITE_DESCRIPTION = 'Notes and posts by hanalice'
+SITE_DESCRIPTION = 'Apple-Style Minimalist Developer'
 TOP_TAG_FILTERS = 12  # homepage filter chips: top N tags by post count
 MAX_CARD_TAGS = 3  # index cards: show at most N chips, then +N
 
@@ -100,6 +100,137 @@ def _first_paragraph_excerpt(body, limit=160):
             return cleaned
     return SITE_DESCRIPTION
 
+
+def _estimate_reading_minutes(body):
+    """Estimate reading time: CJK ~400 chars/min, Latin ~200 wpm."""
+    if not body or not str(body).strip():
+        return 1
+    text = re.sub(r'```.*?```', '', body, flags=re.DOTALL)
+    cjk = len(re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf]', text))
+    latin = re.sub(r'[\u4e00-\u9fff\u3400-\u4dbf]+', ' ', text)
+    words = len(re.findall(r'[A-Za-z0-9_]+', latin))
+    minutes = (cjk / 400.0) + (words / 200.0)
+    return max(1, int(round(minutes)))
+
+
+def _heading_plain_text(inner_html):
+    text = re.sub(r'<[^>]+>', '', inner_html)
+    return html.unescape(text).strip()
+
+
+def _slugify_heading(text, used):
+    """Build a URL-safe id from heading text; ensure uniqueness in used set."""
+    raw = text.strip().lower()
+    raw = re.sub(r'[^\w\u4e00-\u9fff\- ]+', '', raw, flags=re.UNICODE)
+    raw = re.sub(r'\s+', '-', raw).strip('-')
+    if not raw:
+        raw = 'section'
+    base = raw
+    n = 2
+    while raw in used:
+        raw = f'{base}-{n}'
+        n += 1
+    used.add(raw)
+    return raw
+
+
+def _inject_heading_ids_and_build_toc(content_html):
+    """Inject ids on H2/H3 and return (html, toc_items).
+
+    toc_items: list of dicts with keys level (2|3), id, text, number (H2 only).
+    """
+    used = set()
+    # Preserve existing ids if present
+    for m in re.finditer(r'<h([23])\b[^>]*\bid=["\']([^"\']+)["\']', content_html, flags=re.I):
+        used.add(m.group(2))
+
+    toc = []
+    h2_num = 0
+
+    def repl(match):
+        nonlocal h2_num
+        tag = match.group(1).lower()
+        attrs = match.group(2) or ''
+        inner = match.group(3)
+        level = int(tag)
+        plain = _heading_plain_text(inner)
+        id_m = re.search(r'\bid=["\']([^"\']+)["\']', attrs, flags=re.I)
+        if id_m:
+            hid = id_m.group(1)
+            used.add(hid)
+            new_attrs = attrs
+        else:
+            hid = _slugify_heading(plain, used)
+            new_attrs = (attrs + f' id="{html.escape(hid, quote=True)}"').rstrip()
+        if level == 2:
+            h2_num += 1
+            toc.append({'level': 2, 'id': hid, 'text': plain, 'number': h2_num})
+        else:
+            toc.append({'level': 3, 'id': hid, 'text': plain, 'number': None})
+        return f'<h{level}{new_attrs}>{inner}</h{level}>'
+
+    new_html = re.sub(
+        r'<h([23])(\s[^>]*)?>(.*?)</h\1>',
+        repl,
+        content_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return new_html, toc
+
+
+def _toc_html(toc_items):
+    if not toc_items:
+        return ''
+    lis = []
+    for item in toc_items:
+        href = html.escape('#' + item['id'])
+        label = html.escape(item['text'])
+        if item['level'] == 2:
+            prefix = f'{item["number"]}. '
+            cls = 'toc-h2'
+            display = prefix + label
+        else:
+            cls = 'toc-h3'
+            display = f'— {label}'
+        lis.append(
+            f'<li class="{cls}"><a href="{href}">{display}</a></li>'
+        )
+    return (
+        '<nav class="toc" aria-label="本文目录">\n'
+        '<p class="toc-title">本文目录</p>\n'
+        '<ol class="toc-list">\n'
+        + '\n'.join(lis)
+        + '\n</ol>\n'
+        '</nav>'
+    )
+
+
+_TOC_SPY_SCRIPT = """<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var map = {};
+  links.forEach(function (a) {
+    var id = decodeURIComponent(a.getAttribute('href').slice(1));
+    if (id) map[id] = a;
+  });
+  var headings = Object.keys(map).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var activeId = null;
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+    links.forEach(function (a) { a.classList.remove('active'); });
+    if (id && map[id]) map[id].classList.add('active');
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    var visible = entries.filter(function (e) { return e.isIntersecting; })
+      .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+    if (visible.length) setActive(visible[0].target.id);
+  }, { rootMargin: '-20% 0px -65% 0px', threshold: [0, 1] });
+  headings.forEach(function (h) { observer.observe(h); });
+})();
+</script>"""
 
 
 def generate_tag_pages(all_tags, posts):
@@ -405,7 +536,7 @@ def _page_shell(
     return '\n'.join(parts)
 
 
-_SITE_CSS = '/* Apple-inspired theme for GitHub Pages */\n:root {\n  --bg: #f5f5f7;\n  --fg: #1d1d1f;\n  --muted: #86868b;\n  --border: rgba(0, 0, 0, 0.08);\n  --link: #0066cc;\n  --link-hover: #0077ed;\n  --code-bg: #e8e8ed;\n  --chip-bg: #e8e8ed;\n  --chip-active: #1d1d1f;\n  --chip-active-fg: #f5f5f7;\n  --card: #ffffff;\n  --max: 980px;\n  --measure: 65ch;\n  --radius: 12px;\n  --radius-sm: 9800px;\n}\n* { box-sizing: border-box; }\nhtml { -webkit-text-size-adjust: 100%; }\nbody {\n  margin: 0;\n  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;\n  font-size: 17px;\n  line-height: 1.47059;\n  letter-spacing: -0.022em;\n  color: var(--fg);\n  background: var(--bg);\n  min-height: 100vh;\n}\na {\n  color: var(--link);\n  text-decoration: none;\n}\na:hover { color: var(--link-hover); text-decoration: underline; }\n.site-header {\n  position: sticky;\n  top: 0;\n  z-index: 50;\n  backdrop-filter: saturate(180%) blur(20px);\n  -webkit-backdrop-filter: saturate(180%) blur(20px);\n  background: rgba(245, 245, 247, 0.72);\n  border-bottom: 1px solid var(--border);\n}\n.site-nav {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 0.85rem 1.5rem;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 1rem;\n}\n.site-title {\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.03em;\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-title:hover { color: var(--fg); text-decoration: none; opacity: 0.8; }\n.nav-links {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  align-items: center;\n  gap: 1.25rem;\n  font-size: 0.9rem;\n}\n.nav-links a {\n  color: var(--muted);\n  text-decoration: none;\n  font-weight: 400;\n}\n.nav-links a:hover,\n.nav-links a.active {\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-main {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 2.5rem 1.5rem 3.5rem;\n}\n.site-footer {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 1.5rem 1.5rem 2.5rem;\n  border-top: 1px solid var(--border);\n  color: var(--muted);\n  font-size: 0.85rem;\n}\n.site-footer a { color: var(--muted); }\n.site-footer a:hover { color: var(--fg); }\n.page-title {\n  margin: 0 0 0.35rem;\n  font-size: clamp(2rem, 4.5vw, 2.75rem);\n  font-weight: 700;\n  letter-spacing: -0.045em;\n  line-height: 1.1;\n}\n.page-sub {\n  margin: 0 0 2rem;\n  color: var(--muted);\n  font-size: 1.05rem;\n}\n.tag-filters {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.5rem;\n  margin: 0 0 1.75rem;\n  padding: 0 0 1.5rem;\n  border-bottom: 1px solid var(--border);\n}\n.tag-chip {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0.35rem 0.85rem;\n  border-radius: var(--radius-sm);\n  border: none;\n  background: var(--chip-bg);\n  color: var(--fg);\n  font: inherit;\n  font-size: 0.8rem;\n  font-weight: 500;\n  letter-spacing: -0.01em;\n  cursor: pointer;\n  text-decoration: none;\n  transition: background 0.15s ease, color 0.15s ease;\n}\na.tag-chip:hover { text-decoration: none; color: var(--fg); background: #dcdce0; }\nbutton.tag-chip:hover { background: #dcdce0; }\n.tag-chip.active,\n.tag-chip[aria-pressed="true"] {\n  background: var(--chip-active);\n  color: var(--chip-active-fg);\n}\n.tag-chip .count {\n  color: inherit;\n  opacity: 0.65;\n  font-variant-numeric: tabular-nums;\n}\n.post-list {\n  list-style: none;\n  padding: 0;\n  margin: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.post-list > li {\n  background: var(--card);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 1.1rem 1.25rem;\n  transition: box-shadow 0.15s ease, border-color 0.15s ease;\n}\n.post-list > li:hover {\n  border-color: rgba(0, 0, 0, 0.12);\n  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);\n}\n.post-list > li.hidden { display: none; }\n.post-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: 0.35rem 0.85rem;\n}\n.post-list .date {\n  color: var(--muted);\n  font-size: 0.85rem;\n  font-variant-numeric: tabular-nums;\n  min-width: 6.5rem;\n}\n.post-list .post-title {\n  flex: 1 1 12rem;\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.02em;\n  color: var(--fg);\n  text-decoration: none;\n}\n.post-list .post-title:hover { color: var(--link); text-decoration: none; }\n.post-list .post-tags {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n  width: 100%;\n  margin-top: 0.55rem;\n}\n.post-list .post-tags .tag-chip {\n  font-size: 0.72rem;\n  padding: 0.22rem 0.65rem;\n}\n.post-list .post-tags .tag-more {\n  font-size: 0.72rem;\n  color: var(--muted);\n  padding: 0.22rem 0.35rem;\n  text-decoration: none;\n  align-self: center;\n}\na.tag-more:hover { color: var(--fg); text-decoration: none; }\na.tag-chip-more { font-weight: 600; }\n.empty-filter {\n  display: none;\n  color: var(--muted);\n  padding: 1.5rem 0;\n}\n.empty-filter.visible { display: block; }\narticle {\n  max-width: var(--measure);\n}\narticle h1.page-title,\narticle > h1 {\n  margin-top: 0;\n  font-size: clamp(1.75rem, 3.5vw, 2.35rem);\n  font-weight: 700;\n  letter-spacing: -0.04em;\n  line-height: 1.15;\n}\n.post-meta {\n  color: var(--muted);\n  font-size: 0.95rem;\n  margin: 0.5rem 0 1.75rem;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 0.5rem 0.75rem;\n}\n.post-meta .tags,\n.tags {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n}\n.tags li { display: inline; }\n.prose {\n  max-width: var(--measure);\n  line-height: 1.65;\n}\n.prose h2, .prose h3 {\n  letter-spacing: -0.03em;\n  margin-top: 2rem;\n}\n.prose p { margin: 0.9rem 0; }\npre, code {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 0.88em;\n}\ncode {\n  background: var(--code-bg);\n  padding: 0.12em 0.4em;\n  border-radius: 6px;\n}\npre {\n  background: var(--code-bg);\n  padding: 1.1rem 1.2rem;\n  overflow-x: auto;\n  border-radius: 10px;\n  border: 1px solid var(--border);\n}\npre code { background: none; padding: 0; }\ntable { border-collapse: collapse; width: 100%; margin: 1rem 0; }\nth, td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; }\nimg { max-width: 100%; height: auto; border-radius: 8px; }\n.back { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }\n.tag-cloud {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.55rem;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n@media (prefers-color-scheme: dark) {\n  :root {\n    --bg: #000000;\n    --fg: #f5f5f7;\n    --muted: #a1a1a6;\n    --border: rgba(255, 255, 255, 0.12);\n    --link: #2997ff;\n    --link-hover: #6eb5ff;\n    --code-bg: #1d1d1f;\n    --chip-bg: #1d1d1f;\n    --chip-active: #f5f5f7;\n    --chip-active-fg: #1d1d1f;\n    --card: #1d1d1f;\n  }\n  .site-header {\n    background: rgba(0, 0, 0, 0.72);\n  }\n  a.tag-chip:hover,\n  button.tag-chip:hover { background: #2c2c2e; }\n  .post-list > li:hover {\n    border-color: rgba(255, 255, 255, 0.18);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);\n  }\n}\npre code.language-mermaid { display: block; }\n'
+_SITE_CSS = '/* Apple-inspired theme for GitHub Pages */\n:root {\n  --bg: #f5f5f7;\n  --fg: #1d1d1f;\n  --muted: #86868b;\n  --border: rgba(0, 0, 0, 0.08);\n  --link: #0066cc;\n  --link-hover: #0077ed;\n  --code-bg: #e8e8ed;\n  --chip-bg: #e8e8ed;\n  --chip-active: #1d1d1f;\n  --chip-active-fg: #f5f5f7;\n  --card: #ffffff;\n  --max: 980px;\n  --measure: 65ch;\n  --radius: 12px;\n  --radius-sm: 9800px;\n}\n* { box-sizing: border-box; }\nhtml { -webkit-text-size-adjust: 100%; }\nbody {\n  margin: 0;\n  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;\n  font-size: 17px;\n  line-height: 1.47059;\n  letter-spacing: -0.022em;\n  color: var(--fg);\n  background: var(--bg);\n  min-height: 100vh;\n}\na {\n  color: var(--link);\n  text-decoration: none;\n}\na:hover { color: var(--link-hover); text-decoration: underline; }\n.site-header {\n  position: sticky;\n  top: 0;\n  z-index: 50;\n  backdrop-filter: saturate(180%) blur(20px);\n  -webkit-backdrop-filter: saturate(180%) blur(20px);\n  background: rgba(245, 245, 247, 0.72);\n  border-bottom: 1px solid var(--border);\n}\n.site-nav {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 0.85rem 1.5rem;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 1rem;\n}\n.site-title {\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.03em;\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-title:hover { color: var(--fg); text-decoration: none; opacity: 0.8; }\n.nav-links {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  align-items: center;\n  gap: 1.25rem;\n  font-size: 0.9rem;\n}\n.nav-links a {\n  color: var(--muted);\n  text-decoration: none;\n  font-weight: 400;\n}\n.nav-links a:hover,\n.nav-links a.active {\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-main {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 2.5rem 1.5rem 3.5rem;\n}\n.site-footer {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 1.5rem 1.5rem 2.5rem;\n  border-top: 1px solid var(--border);\n  color: var(--muted);\n  font-size: 0.85rem;\n}\n.site-footer a { color: var(--muted); }\n.site-footer a:hover { color: var(--fg); }\n.page-title {\n  margin: 0 0 0.35rem;\n  font-size: clamp(2rem, 4.5vw, 2.75rem);\n  font-weight: 700;\n  letter-spacing: -0.045em;\n  line-height: 1.1;\n}\n.page-sub {\n  margin: 0 0 2rem;\n  color: var(--muted);\n  font-size: 1.05rem;\n}\n.tag-filters {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.5rem;\n  margin: 0 0 1.75rem;\n  padding: 0 0 1.5rem;\n  border-bottom: 1px solid var(--border);\n}\n.tag-chip {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0.35rem 0.85rem;\n  border-radius: var(--radius-sm);\n  border: none;\n  background: var(--chip-bg);\n  color: var(--fg);\n  font: inherit;\n  font-size: 0.8rem;\n  font-weight: 500;\n  letter-spacing: -0.01em;\n  cursor: pointer;\n  text-decoration: none;\n  transition: background 0.15s ease, color 0.15s ease;\n}\na.tag-chip:hover { text-decoration: none; color: var(--fg); background: #dcdce0; }\nbutton.tag-chip:hover { background: #dcdce0; }\n.tag-chip.active,\n.tag-chip[aria-pressed="true"] {\n  background: var(--chip-active);\n  color: var(--chip-active-fg);\n}\n.tag-chip .count {\n  color: inherit;\n  opacity: 0.65;\n  font-variant-numeric: tabular-nums;\n}\n.post-list {\n  list-style: none;\n  padding: 0;\n  margin: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.post-list > li {\n  background: var(--card);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 1.1rem 1.25rem;\n  transition: box-shadow 0.15s ease, border-color 0.15s ease;\n}\n.post-list > li:hover {\n  border-color: rgba(0, 0, 0, 0.12);\n  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);\n}\n.post-list > li.hidden { display: none; }\n.post-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: 0.35rem 0.85rem;\n}\n.post-card {\n  display: flex;\n  flex-direction: column;\n  gap: 0.35rem;\n}\n.post-meta-line {\n  margin: 0;\n}\n.post-list .date {\n  color: var(--muted);\n  font-size: 0.85rem;\n  font-variant-numeric: tabular-nums;\n}\n.post-list .post-title {\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.02em;\n  color: var(--fg);\n  text-decoration: none;\n  line-height: 1.3;\n}\n.post-list .post-title:hover { color: var(--link); text-decoration: none; }\n.post-desc {\n  margin: 0.1rem 0 0.2rem;\n  color: var(--muted);\n  font-size: 0.92rem;\n  line-height: 1.45;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 3;\n  line-clamp: 3;\n  overflow: hidden;\n}\n.post-list .post-tags {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n  width: 100%;\n  margin-top: 0.35rem;\n}\n.post-list .post-tags .tag-chip {\n  font-size: 0.72rem;\n  padding: 0.22rem 0.65rem;\n}\n.post-list .post-tags .tag-more {\n  font-size: 0.72rem;\n  color: var(--muted);\n  padding: 0.22rem 0.35rem;\n  text-decoration: none;\n  align-self: center;\n}\na.tag-more:hover { color: var(--fg); text-decoration: none; }\na.tag-chip-more { font-weight: 600; }\n.empty-filter {\n  display: none;\n  color: var(--muted);\n  padding: 1.5rem 0;\n}\n.empty-filter.visible { display: block; }\n.post-layout {\n  display: flex;\n  flex-direction: column;\n  gap: 1.25rem;\n}\n.post-layout > article {\n  max-width: var(--measure);\n  width: 100%;\n  min-width: 0;\n}\narticle {\n  max-width: var(--measure);\n}\narticle h1.page-title,\narticle > h1 {\n  margin-top: 0;\n  font-size: clamp(1.75rem, 3.5vw, 2.35rem);\n  font-weight: 700;\n  letter-spacing: -0.04em;\n  line-height: 1.15;\n}\n.back-top {\n  margin: 0 0 0.85rem;\n  font-size: 0.9rem;\n}\n.back-top a { color: var(--muted); text-decoration: none; }\n.back-top a:hover { color: var(--fg); text-decoration: none; }\n.post-meta {\n  color: var(--muted);\n  font-size: 0.95rem;\n  margin: 0.5rem 0 1.75rem;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 0.5rem 0.75rem;\n}\n.post-meta .reading-time::before {\n  content: "·";\n  margin-right: 0.5rem;\n  color: var(--muted);\n}\n.toc {\n  font-size: 0.88rem;\n  color: var(--muted);\n  background: var(--card);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 1rem 1.1rem;\n}\n.toc-title {\n  margin: 0 0 0.65rem;\n  font-size: 0.78rem;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n  text-transform: uppercase;\n  color: var(--muted);\n}\n.toc-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 0.35rem;\n}\n.toc-list a {\n  color: var(--muted);\n  text-decoration: none;\n  display: block;\n  line-height: 1.35;\n  border-left: 2px solid transparent;\n  padding-left: 0.55rem;\n  margin-left: -0.15rem;\n}\n.toc-list a:hover,\n.toc-list a.active {\n  color: var(--fg);\n  text-decoration: none;\n  border-left-color: var(--fg);\n}\n.toc-h3 a {\n  padding-left: 1.15rem;\n  font-size: 0.84rem;\n}\n@media (min-width: 1100px) {\n  .site-main:has(.post-layout.has-toc) {\n    max-width: 1120px;\n  }\n  .post-layout.has-toc {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr) 230px;\n    gap: 2.25rem;\n    align-items: start;\n  }\n  .post-layout.has-toc > .toc {\n    grid-column: 2;\n    grid-row: 1;\n    position: sticky;\n    top: 5rem;\n    max-height: calc(100vh - 6rem);\n    overflow-y: auto;\n    align-self: start;\n  }\n  .post-layout.has-toc > article {\n    grid-column: 1;\n    grid-row: 1;\n  }\n}\n@media (max-width: 1099px) {\n  .toc {\n    order: -1;\n  }\n  .post-layout.has-toc > .toc {\n    max-height: 14rem;\n    overflow-y: auto;\n  }\n}\n.post-meta .tags,\n.tags {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n}\n.tags li { display: inline; }\n.prose {\n  max-width: var(--measure);\n  line-height: 1.65;\n}\n.prose h2, .prose h3 {\n  letter-spacing: -0.03em;\n  margin-top: 2rem;\n}\n.prose p { margin: 0.9rem 0; }\npre, code {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 0.88em;\n}\ncode {\n  background: var(--code-bg);\n  padding: 0.12em 0.4em;\n  border-radius: 6px;\n}\npre {\n  background: var(--code-bg);\n  padding: 1.1rem 1.2rem;\n  overflow-x: auto;\n  border-radius: 10px;\n  border: 1px solid var(--border);\n}\npre code { background: none; padding: 0; }\ntable { border-collapse: collapse; width: 100%; margin: 1rem 0; }\nth, td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; }\nimg { max-width: 100%; height: auto; border-radius: 8px; }\n.back { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }\n.tag-cloud {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.55rem;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n@media (prefers-color-scheme: dark) {\n  :root {\n    --bg: #000000;\n    --fg: #f5f5f7;\n    --muted: #a1a1a6;\n    --border: rgba(255, 255, 255, 0.12);\n    --link: #2997ff;\n    --link-hover: #6eb5ff;\n    --code-bg: #1d1d1f;\n    --chip-bg: #1d1d1f;\n    --chip-active: #f5f5f7;\n    --chip-active-fg: #1d1d1f;\n    --card: #1d1d1f;\n  }\n  .site-header {\n    background: rgba(0, 0, 0, 0.72);\n  }\n  a.tag-chip:hover,\n  button.tag-chip:hover { background: #2c2c2e; }\n  .post-list > li:hover {\n    border-color: rgba(255, 255, 255, 0.18);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);\n  }\n}\npre code.language-mermaid { display: block; }\n'
 
 
 def _write_site_css():
@@ -526,6 +657,10 @@ def _render_index(posts, all_tags):
         href = html.escape(_href(f"posts/{p['basename']}.html"))
         title = html.escape(p['title'])
         date = html.escape(p['date'])
+        mins = _estimate_reading_minutes(p.get('body', ''))
+        meta_line = html.escape(f'{p["date"]} · {mins} 分钟阅读')
+        desc = html.escape(p.get('description') or '')
+        desc_html = f'<p class="post-desc">{desc}</p>' if desc else ''
         data_tags = html.escape(' '.join(p['tags']))
         chips = _post_tag_chips_html(
             p['tags'],
@@ -535,9 +670,10 @@ def _render_index(posts, all_tags):
         tags_row = f'<div class="post-tags">{chips}</div>' if chips else ''
         items.append(
             f'<li data-tags="{data_tags}">'
-            f'<div class="post-row">'
-            f'<span class="date">{date}</span>'
+            f'<div class="post-card">'
+            f'<div class="post-meta-line"><span class="date">{meta_line}</span></div>'
             f'<a class="post-title" href="{href}">{title}</a>'
+            f'{desc_html}'
             f'{tags_row}'
             f'</div></li>'
         )
@@ -571,19 +707,39 @@ def _render_post(post):
     content_html = _rewrite_post_md_links(
         _rewrite_relative_urls(_markdown_to_html(body))
     )
+    content_html, toc_items = _inject_heading_ids_and_build_toc(content_html)
+    toc = _toc_html(toc_items)
     tags_html = ''
     if post['tags']:
         tags_html = f'<div class="tags">{_post_tag_chips_html(post["tags"])}</div>'
-    body = (
+    mins = _estimate_reading_minutes(post.get('body', ''))
+    meta_time = (
+        f'<time datetime="{html.escape(post["date"])}">'
+        f'{html.escape(post["date"])}</time>'
+        f'<span class="reading-time">{mins} 分钟阅读</span>'
+    )
+    back_top = (
+        f'<p class="back-top"><a href="{html.escape(_href(""))}">'
+        f'&larr; 返回文章列表</a></p>'
+    )
+    article = (
         f'<article>\n'
+        f'{back_top}\n'
         f'<h1 class="page-title">{html.escape(post["title"])}</h1>\n'
-        f'<div class="post-meta"><time datetime="{html.escape(post["date"])}">'
-        f'{html.escape(post["date"])}</time>{tags_html}</div>\n'
+        f'<div class="post-meta">{meta_time}{tags_html}</div>\n'
         f'<div class="prose">\n{content_html}\n</div>\n'
-        f'<p class="back"><a href="{html.escape(_href(""))}">&larr; Back to posts</a></p>\n'
+        f'<p class="back"><a href="{html.escape(_href(""))}">&larr; 返回文章列表</a></p>\n'
         f'</article>'
     )
+    if toc:
+        layout_cls = 'post-layout has-toc'
+        body = f'<div class="{layout_cls}">\n{toc}\n{article}\n</div>'
+    else:
+        body = f'<div class="post-layout">\n{article}\n</div>'
     mermaid_bits = _mermaid_assets() if _content_has_mermaid(post['body'], content_html) else ('', '')
+    extra_end = mermaid_bits[1]
+    if toc:
+        extra_end = (extra_end + '\n' if extra_end else '') + _TOC_SPY_SCRIPT
     return _page_shell(
         title=f'{post["title"]} · {SITE_TITLE}',
         description=post['description'] or SITE_DESCRIPTION,
@@ -592,7 +748,7 @@ def _render_post(post):
         og_type='article',
         nav_active=None,
         extra_head=mermaid_bits[0],
-        extra_body_end=mermaid_bits[1],
+        extra_body_end=extra_end,
     )
 
 

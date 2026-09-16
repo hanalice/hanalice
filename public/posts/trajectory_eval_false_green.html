@@ -26,14 +26,36 @@
   </nav>
 </header>
 <main class="site-main">
+<div class="post-layout has-toc">
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h2"><a href="#1-问题现象-problem-symptoms">1. 1. 问题现象 (Problem Symptoms)</a></li>
+<li class="toc-h3"><a href="#现象-a同一答案两条轨迹">— 现象 A：同一答案，两条轨迹</a></li>
+<li class="toc-h3"><a href="#现象-b乱调工具答案碰巧对">— 现象 B：乱调工具，答案碰巧对</a></li>
+<li class="toc-h3"><a href="#现象-c空转重试被当成努力">— 现象 C：空转重试被当成「努力」</a></li>
+<li class="toc-h2"><a href="#2-根因分析-root-cause-analysis">2. 2. 根因分析 (Root Cause Analysis)</a></li>
+<li class="toc-h2"><a href="#3-机制要点评路径不只评终点-mechanism">3. 3. 机制要点：评路径，不只评终点 (Mechanism)</a></li>
+<li class="toc-h3"><a href="#trace-是评估的原料">— Trace 是评估的原料</a></li>
+<li class="toc-h3"><a href="#匹配模式多样性-vs-过严断言">— 匹配模式：多样性 vs 过严断言</a></li>
+<li class="toc-h3"><a href="#指标不要合成一个分数糊弄自己">— 指标不要合成一个分数糊弄自己</a></li>
+<li class="toc-h2"><a href="#4-bad-good同一任务的评估设计-bad-good">4. 4. BAD / GOOD：同一任务的评估设计 (BAD / GOOD)</a></li>
+<li class="toc-h3"><a href="#bad只钉终答-过严金轨迹">— BAD：只钉终答 + 过严金轨迹</a></li>
+<li class="toc-h3"><a href="#good终态-有界路径集合-预算">— GOOD：终态 + 有界路径集合 + 预算</a></li>
+<li class="toc-h2"><a href="#5-发版前清单-pre-ship-checklist">5. 5. 发版前清单 (Pre-Ship Checklist)</a></li>
+<li class="toc-h2"><a href="#6-小结-takeaways">6. 6. 小结 (Takeaways)</a></li>
+<li class="toc-h2"><a href="#参考-references">7. 参考 (References)</a></li>
+</ol>
+</nav>
 <article>
+<p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">Trajectory Eval：答对了为什么还是假绿</h1>
-<div class="post-meta"><time datetime="2026-09-15">2026-09-15</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Agent.html" data-tag="Agent">#Agent</a><a class="tag-chip" href="/hanalice/tags/Evaluation.html" data-tag="Evaluation">#Evaluation</a><a class="tag-chip" href="/hanalice/tags/Trajectory.html" data-tag="Trajectory">#Trajectory</a><a class="tag-chip" href="/hanalice/tags/Observability.html" data-tag="Observability">#Observability</a><a class="tag-chip" href="/hanalice/tags/Tool-Calling.html" data-tag="Tool-Calling">#Tool-Calling</a></div></div>
+<div class="post-meta"><time datetime="2026-09-15">2026-09-15</time><span class="reading-time">6 分钟阅读</span><div class="tags"><a class="tag-chip" href="/hanalice/tags/Agent.html" data-tag="Agent">#Agent</a><a class="tag-chip" href="/hanalice/tags/Evaluation.html" data-tag="Evaluation">#Evaluation</a><a class="tag-chip" href="/hanalice/tags/Trajectory.html" data-tag="Trajectory">#Trajectory</a><a class="tag-chip" href="/hanalice/tags/Observability.html" data-tag="Observability">#Observability</a><a class="tag-chip" href="/hanalice/tags/Tool-Calling.html" data-tag="Tool-Calling">#Tool-Calling</a></div></div>
 <div class="prose">
-<h2>1. 问题现象 (Problem Symptoms)</h2>
+<h2 id="1-问题现象-problem-symptoms">1. 问题现象 (Problem Symptoms)</h2>
 <p>上一篇讲工具面：schema 绿灯、业务却错。评估面有对称的坑——<strong>final answer 绿了，轨迹其实在空转</strong>。</p>
 <p>CI 只比最终字符串或一个 LLM-as-judge 的「答案对不对」。合并门打开，成本曲线、工具误用、重试风暴都还在生产里。这种绿灯叫 <strong>false green（假绿）</strong>：outcome 过了，path 没过。</p>
-<h3>现象 A：同一答案，两条轨迹</h3>
+<h3 id="现象-a同一答案两条轨迹">现象 A：同一答案，两条轨迹</h3>
 <p>任务：「查 INV-1024 的可退税额，用一句话回复」。</p>
 <table>
 <thead>
@@ -72,9 +94,9 @@
 </tbody>
 </table>
 <p>答案相同，成本差一个数量级。只评终答，Bad 和 Good 一样绿。</p>
-<h3>现象 B：乱调工具，答案碰巧对</h3>
+<h3 id="现象-b乱调工具答案碰巧对">现象 B：乱调工具，答案碰巧对</h3>
 <p>用户问退款政策。Agent 先调了 <code>update_ticket</code>（写操作），再 <code>get_policy</code>，最后从 policy 文本里抄出正确答案。终答判对；轨迹里多了一次不该发生的写。假绿掩盖了 <strong>wrong tool / side-effect on the path</strong>。</p>
-<h3>现象 C：空转重试被当成「努力」</h3>
+<h3 id="现象-c空转重试被当成努力">现象 C：空转重试被当成「努力」</h3>
 <p>上游 <code>get_inventory</code> 连续返回可行动的 <code>isError</code>（SKU 不存在）。Agent 改参数重试 5 次，最后靠另一条旁路工具碰巧拿到了库存结论。终答绿；trace 上是 <strong>retry loop without progress</strong>。没有 step budget / loop detector，这类轨迹永远进不了红灯。</p>
 <pre><code class="language-mermaid">flowchart LR
   A[只评 final answer] --&gt; B[答案正确]
@@ -83,7 +105,7 @@
   D --&gt; E[生产里才爆]
 </code></pre>
 <hr />
-<h2>2. 根因分析 (Root Cause Analysis)</h2>
+<h2 id="2-根因分析-root-cause-analysis">2. 根因分析 (Root Cause Analysis)</h2>
 <p>假绿不是「评测太严」，而是 <strong>评估表面积（evaluation surface）选错了</strong>：把 Agent 当成单轮 LLM——只看 input → final output——而 Agent 的失败大半发生在中间的 tool calls、retries、handoffs。</p>
 <p>用三层诊断栈（Confident AI / DeepEval 与 Langfuse 的常见分法一致）：</p>
 <table>
@@ -154,8 +176,8 @@
 </tbody>
 </table>
 <hr />
-<h2>3. 机制要点：评路径，不只评终点 (Mechanism)</h2>
-<h3>Trace 是评估的原料</h3>
+<h2 id="3-机制要点评路径不只评终点-mechanism">3. 机制要点：评路径，不只评终点 (Mechanism)</h2>
+<h3 id="trace-是评估的原料">Trace 是评估的原料</h3>
 <p>没有结构化 trace（messages / tool calls / spans），trajectory eval 无处挂载。实践上至少要留下：</p>
 <ul>
 <li>有序的 tool call 名与参数（可对敏感字段脱敏）</li>
@@ -163,7 +185,7 @@
 <li>可选：计划文本、子 Agent handoff</li>
 </ul>
 <p>Langfuse 把 trajectory 拆成可判定的一半（step count、loop、required steps、budget）和需阅读的一半（LLM-as-a-judge / 人工看图）；Agent graph 的 Aggregated 视图能把 <code>retrieve_docs (3/3)</code> 和环边一眼标成病态路径。</p>
-<h3>匹配模式：多样性 vs 过严断言</h3>
+<h3 id="匹配模式多样性-vs-过严断言">匹配模式：多样性 vs 过严断言</h3>
 <p>LangChain <code>agentevals</code> 的 trajectory match 把「和参考轨迹比」收成四种模式——这正是「可接受路径多样性」的工程旋钮：</p>
 <table>
 <thead>
@@ -208,7 +230,7 @@
 <li><strong>顺序真正有业务约束</strong>才上 <code>strict</code>；其余先 <code>unordered</code> 或 LLM judge。</li>
 <li>参数是否逐字相等，用 <code>tool_args_match_mode</code> / overrides 单独放宽（时间戳、idempotency key 常要忽略或规范化）。</li>
 </ul>
-<h3>指标不要合成一个分数糊弄自己</h3>
+<h3 id="指标不要合成一个分数糊弄自己">指标不要合成一个分数糊弄自己</h3>
 <p>Trajectory 不是一个魔法 score。生产里我们拆开看（名称跟 DeepEval / Confident AI 2026 指南对齐，便于对照实现）：</p>
 <table>
 <thead>
@@ -248,9 +270,9 @@
 </table>
 <p><strong>假绿的操作定义</strong>：Task Completion（或 answer match）= pass，且下列任一 = fail：Tool Correctness、禁区副作用、Step Efficiency / budget、成本分位。</p>
 <hr />
-<h2>4. BAD / GOOD：同一任务的评估设计 (BAD / GOOD)</h2>
+<h2 id="4-bad-good同一任务的评估设计-bad-good">4. BAD / GOOD：同一任务的评估设计 (BAD / GOOD)</h2>
 <p>任务仍是：「查 INV-1024 可退税额，一句话回复」。允许的只读路径：<code>get_invoice</code> → <code>calc_refund</code>；允许先 <code>get_taxonomy</code> 再查；禁止任何 <code>update_*</code> / <code>send_*</code>。</p>
-<h3>BAD：只钉终答 + 过严金轨迹</h3>
+<h3 id="bad只钉终答-过严金轨迹">BAD：只钉终答 + 过严金轨迹</h3>
 <pre><code class="language-python"># ❌ 假绿 + 假红两头不讨好
 def eval_refund_agent(run):
     # 1) 只看终答
@@ -268,7 +290,7 @@ def eval_refund_agent(run):
 <li>Good 但先 <code>calc</code> 再被框架重排/或先拉 taxonomy → strict 红（假红）。</li>
 <li><code>update_ticket</code> 混进路径 → 无人报警。</li>
 </ul>
-<h3>GOOD：终态 + 有界路径集合 + 预算</h3>
+<h3 id="good终态-有界路径集合-预算">GOOD：终态 + 有界路径集合 + 预算</h3>
 <pre><code class="language-python"># ✅ outcome 与 path 拆开；多样性用集合约束，不用唯一序列神化
 REQUIRED = {&quot;get_invoice&quot;, &quot;calc_refund&quot;}
 ALLOWED = REQUIRED | {&quot;get_taxonomy&quot;}  # 可接受路径多样性
@@ -299,7 +321,7 @@ def eval_refund_agent(run):
 <p>对照现象 A：Good（2 步）过；Bad（6 步含无关检索与重复 get）在 budget / scope 挂掉——即使终答相同。</p>
 <p>需要「先政策后动作」的合规步时，再对<strong>那一段</strong>加 <code>strict</code> 子序列，而不是整条轨迹全局 strict。更模糊的「是否在兜圈子」交给 <code>create_trajectory_llm_as_judge</code>（或等价 rubric），与确定性闸门串联：便宜的 code check 先筛，judge 抽检或只打可疑 trace。</p>
 <hr />
-<h2>5. 发版前清单 (Pre-Ship Checklist)</h2>
+<h2 id="5-发版前清单-pre-ship-checklist">5. 发版前清单 (Pre-Ship Checklist)</h2>
 <p>把评估面补齐再让 final-answer 门禁单独说了算：</p>
 <p><strong>Instrumentation</strong></p>
 <ul>
@@ -327,7 +349,7 @@ def eval_refund_agent(run):
 <li>[ ] 线上：采样 trace 跑 budget / forbidden tool；尖刺回灌数据集</li>
 </ul>
 <hr />
-<h2>6. 小结 (Takeaways)</h2>
+<h2 id="6-小结-takeaways">6. 小结 (Takeaways)</h2>
 <p>假绿的本质是：<strong>用单轮答案评估，去给多步 Agent 发通行证</strong>。</p>
 <ul>
 <li><strong>Outcome ≠ Path</strong>；答对仍可能乱调工具、空转重试、成本爆炸。</li>
@@ -337,7 +359,7 @@ def eval_refund_agent(run):
 </ul>
 <p>下一坑更偏写路径运行时：<strong>Agent 写操作的幂等</strong>——超时之后凭什么敢重试，如何避免双写（接现象 C 与工具 annotations 的边界）。</p>
 <hr />
-<h2>参考 (References)</h2>
+<h2 id="参考-references">参考 (References)</h2>
 <ol>
 <li>LangChain Docs — <a href="https://docs.langchain.com/langsmith/trajectory-evals">How to evaluate your agent with trajectory evaluations</a>（<code>agentevals</code>：<code>strict</code> / <code>unordered</code> / <code>subset</code> / <code>superset</code>；trajectory LLM-as-judge）。</li>
 <li>LangChain — <a href="https://docs.langchain.com/oss/python/langchain/test/evals">Agent Evals</a>；<a href="https://github.com/langchain-ai/agentevals"><code>langchain-ai/agentevals</code></a>。</li>
@@ -346,8 +368,9 @@ def eval_refund_agent(run):
 <li>DeepEval — <a href="https://deepeval.com/guides/guides-ai-agent-evaluation">AI Agent Evaluation</a>（trajectory vs end-to-end vs component；tracing 要求）。</li>
 </ol>
 </div>
-<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
+<p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+</div>
 </main>
 <footer class="site-footer">
   <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
@@ -359,6 +382,32 @@ def eval_refund_agent(run):
   var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default" });
   mermaid.run({ querySelector: "code.language-mermaid, .mermaid" });
+})();
+</script>
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var map = {};
+  links.forEach(function (a) {
+    var id = decodeURIComponent(a.getAttribute('href').slice(1));
+    if (id) map[id] = a;
+  });
+  var headings = Object.keys(map).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var activeId = null;
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+    links.forEach(function (a) { a.classList.remove('active'); });
+    if (id && map[id]) map[id].classList.add('active');
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    var visible = entries.filter(function (e) { return e.isIntersecting; })
+      .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+    if (visible.length) setActive(visible[0].target.id);
+  }, { rootMargin: '-20% 0px -65% 0px', threshold: [0, 1] });
+  headings.forEach(function (h) { observer.observe(h); });
 })();
 </script>
 </body>

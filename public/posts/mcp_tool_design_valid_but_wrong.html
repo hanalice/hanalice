@@ -26,20 +26,42 @@
   </nav>
 </header>
 <main class="site-main">
+<div class="post-layout has-toc">
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h2"><a href="#1-问题现象-problem-symptoms">1. 1. 问题现象 (Problem Symptoms)</a></li>
+<li class="toc-h3"><a href="#现象-a选错工具update-当-send">— 现象 A：选错工具——update 当 send</a></li>
+<li class="toc-h3"><a href="#现象-b合法字符串错误枚举region-自由文本">— 现象 B：合法字符串，错误枚举——region 自由文本</a></li>
+<li class="toc-h3"><a href="#现象-c超时重试导致双写">— 现象 C：超时重试导致双写</a></li>
+<li class="toc-h3"><a href="#伴随症状context-bloat">— 伴随症状：Context Bloat</a></li>
+<li class="toc-h2"><a href="#2-根因分析-root-cause-analysis">2. 2. 根因分析 (Root Cause Analysis)</a></li>
+<li class="toc-h2"><a href="#3-协议要点description-是路由契约-protocol-notes">3. 3. 协议要点：description 是路由契约 (Protocol Notes)</a></li>
+<li class="toc-h3"><a href="#protocol-error-vs-tool-execution-error">— Protocol Error vs Tool Execution Error</a></li>
+<li class="toc-h3"><a href="#annotations-是提示不是安全边界">— Annotations 是提示，不是安全边界</a></li>
+<li class="toc-h2"><a href="#4-设计演进v1-v4-与-bad-good-schema-design-evolution">4. 4. 设计演进：V1 → V4 与 BAD / GOOD Schema (Design Evolution)</a></li>
+<li class="toc-h3"><a href="#bad开放字符串-重叠描述">— BAD：开放字符串 + 重叠描述</a></li>
+<li class="toc-h3"><a href="#good互斥描述-关闭非法状态-默认值">— GOOD：互斥描述 + 关闭非法状态 + 默认值</a></li>
+<li class="toc-h2"><a href="#5-发工具前检查清单-pre-ship-checklist">5. 5. 发工具前检查清单 (Pre-Ship Checklist)</a></li>
+<li class="toc-h2"><a href="#6-小结-takeaways">6. 6. 小结 (Takeaways)</a></li>
+<li class="toc-h2"><a href="#参考-references">7. 参考 (References)</a></li>
+</ol>
+</nav>
 <article>
+<p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用</h1>
-<div class="post-meta"><time datetime="2026-09-15">2026-09-15</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Agent.html" data-tag="Agent">#Agent</a><a class="tag-chip" href="/hanalice/tags/MCP.html" data-tag="MCP">#MCP</a><a class="tag-chip" href="/hanalice/tags/Tool-Calling.html" data-tag="Tool-Calling">#Tool-Calling</a><a class="tag-chip" href="/hanalice/tags/Schema.html" data-tag="Schema">#Schema</a><a class="tag-chip" href="/hanalice/tags/Context-Engineering.html" data-tag="Context-Engineering">#Context-Engineering</a></div></div>
+<div class="post-meta"><time datetime="2026-09-15">2026-09-15</time><span class="reading-time">10 分钟阅读</span><div class="tags"><a class="tag-chip" href="/hanalice/tags/Agent.html" data-tag="Agent">#Agent</a><a class="tag-chip" href="/hanalice/tags/MCP.html" data-tag="MCP">#MCP</a><a class="tag-chip" href="/hanalice/tags/Tool-Calling.html" data-tag="Tool-Calling">#Tool-Calling</a><a class="tag-chip" href="/hanalice/tags/Schema.html" data-tag="Schema">#Schema</a><a class="tag-chip" href="/hanalice/tags/Context-Engineering.html" data-tag="Context-Engineering">#Context-Engineering</a></div></div>
 <div class="prose">
-<h2>1. 问题现象 (Problem Symptoms)</h2>
+<h2 id="1-问题现象-problem-symptoms">1. 问题现象 (Problem Symptoms)</h2>
 <p>给 Agent 接上 MCP Server 之后，最常见的失败形态不是「参数校验挂了」，而是：<strong>调用在 schema 层面完全合法，在业务层面完全错误</strong>。</p>
 <p>Zod / JSON Schema 绿灯，JSON-RPC 也没抛协议错误，但结果已经偏了。这类 failure 难排查：日志里看不到 malformed payload，只有一串 well-formed wrong。</p>
-<h3>现象 A：选错工具——<code>update</code> 当 <code>send</code></h3>
+<h3 id="现象-a选错工具update-当-send">现象 A：选错工具——<code>update</code> 当 <code>send</code></h3>
 <p>你暴露了 <code>update_invoice</code> 和 <code>send_invoice</code>。用户说「把这张发票发出去」。两份 description 语义重叠，模型选了 <code>update_invoice({ status: "sent" })</code>，以为改了状态就等于寄出了 PDF。每个参数都合法，邮件从未发出。</p>
-<h3>现象 B：合法字符串，错误枚举——<code>region</code> 自由文本</h3>
+<h3 id="现象-b合法字符串错误枚举region-自由文本">现象 B：合法字符串，错误枚举——<code>region</code> 自由文本</h3>
 <p>字段类型是 <code>region: string</code>。同一次任务里，模型可能写出 <code>"Canary Islands"</code>、<code>"canarias"</code>、<code>"ES-CN"</code>、<code>"islas canarias"</code>。全部是合法 string；税务引擎只认其中一个 canonical token。</p>
-<h3>现象 C：超时重试导致双写</h3>
+<h3 id="现象-c超时重试导致双写">现象 C：超时重试导致双写</h3>
 <p><code>create_order</code> 超时。错误是一坨 stringified <code>500</code> / <code>timeout</code>，模型分不清「已落库但响应丢了」和「根本没写成功」，于是换个参数再调一次——双写。idempotency key 没进 schema，retry 变成了 side effect amplifier。</p>
-<h3>伴随症状：Context Bloat</h3>
+<h3 id="伴随症状context-bloat">伴随症状：Context Bloat</h3>
 <p>多个 MCP Server 一挂上，工具定义在用户开口前就占满 context。推理能力下降 → 更差的工具选择 → 更多重试 → context 继续膨胀。Confusion 与 Bloat 互相喂养。</p>
 <pre><code class="language-mermaid">flowchart LR
   A[工具定义塞满 context] --&gt; B[推理退化]
@@ -48,7 +70,7 @@
   D --&gt; A
 </code></pre>
 <hr />
-<h2>2. 根因分析 (Root Cause Analysis)</h2>
+<h2 id="2-根因分析-root-cause-analysis">2. 根因分析 (Root Cause Analysis)</h2>
 <p>AWS 对 MCP 工具失效的归纳很干脆：<strong>Confusion + Bloat</strong>。协议本身很少是罪魁；多数团队把现有 REST API 原样 wrap 成 tool，指望模型「自己看懂」。</p>
 <ul>
 <li><strong>Bloat</strong>：工具定义每轮都进 context，无论用不用。多 Server 叠加后，上下文在第一轮提问前就已稀缺。</li>
@@ -88,9 +110,9 @@
 </table>
 <p>经验研究也在侧面印证「描述层」问题的普遍性：对 103 个 MCP Server、856 个工具的扫描显示，<strong>约 97.1% 的工具描述至少带有一种 smell</strong>，其中约 56% 甚至未能清楚陈述用途（Unclear Purpose）。描述增强能抬升成功率，但也可能让执行步数暴涨——又一次撞上 Confusion vs Bloat 的权衡。</p>
 <hr />
-<h2>3. 协议要点：description 是路由契约 (Protocol Notes)</h2>
+<h2 id="3-协议要点description-是路由契约-protocol-notes">3. 协议要点：description 是路由契约 (Protocol Notes)</h2>
 <p>MCP Tools 规范里，工具靠 <code>name</code> + <code>description</code> + <code>inputSchema</code>（以及可选的 <code>outputSchema</code> / <code>annotations</code>）被模型发现和调用。对 Agent 而言，<strong>description 不是注释，而是路由契约</strong>：模型几乎只靠它决定「调谁」。两份 description 都能回答「发送这张发票」，就是你发到生产上的 routing bug。</p>
-<h3>Protocol Error vs Tool Execution Error</h3>
+<h3 id="protocol-error-vs-tool-execution-error">Protocol Error vs Tool Execution Error</h3>
 <p>Agent 调工具时，失败对应规范里的两种 <strong>error reporting mechanism</strong>：</p>
 <ol>
 <li><strong>电话没打通</strong> → <strong>Protocol Error</strong>（协议错误：JSON-RPC 响应里的 <code>error</code>）</li>
@@ -137,7 +159,7 @@
 <p>若第 3 步改成抛 JSON-RPC <code>-32602</code>：Host 可能只报 Invalid params，模型不知道要先 finalize。<br />
 反过来：模型传 <code>invoiceId: 12345</code>（该是 string）→ 应用 Protocol Error / schema 拒绝，不必进业务代码。</p>
 <p>这和全文主题的关系：「合法但错误」多半指过了 schema（协议层绿灯），业务上却选错工具 / 填错语义 / 顺序不对。那种失败要靠更好的 description / enum 减少走进死胡同，以及走进去之后用清晰的 <code>isError</code> 文案把模型拉回来——而不是全部打成 Protocol Error，也不是全部变成一句糊里糊涂的 500。</p>
-<h3>Annotations 是提示，不是安全边界</h3>
+<h3 id="annotations-是提示不是安全边界">Annotations 是提示，不是安全边界</h3>
 <p><code>readOnlyHint</code> / <code>destructiveHint</code> / <code>idempotentHint</code> / <code>openWorldHint</code> 让 Host 可以对读操作自动放行、对破坏性写操作要求人工确认。规范明确：<strong>clients MUST consider tool annotations to be untrusted unless they come from trusted servers</strong>。真实鉴权、对象级授权、幂等与速率限制必须落在 Server 侧；annotation 只能缩小 blast radius，不能替代 enforcement。</p>
 <p>它们定义在 <strong>Tool</strong> 对象的可选字段 <code>annotations</code>（类型 <strong>ToolAnnotations</strong>）：<code>tools/list</code> 的返回值里，与 <code>name</code> / <code>description</code> / <code>inputSchema</code> 同级。见 <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools</a> 与 <a href="https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations">schema：<code>Tool</code> / <code>ToolAnnotations</code></a>。<code>tools/call</code> 的请求/结果里没有这份结构。</p>
 <pre><code class="language-json">{
@@ -174,7 +196,7 @@
 </code></pre>
 <p>省略某 hint 时走规范默认值（<code>readOnlyHint</code> 默认 <code>false</code>，<code>destructiveHint</code> 默认 <code>true</code>）。缺字段不等于「安全」。</p>
 <hr />
-<h2>4. 设计演进：V1 → V4 与 BAD / GOOD Schema (Design Evolution)</h2>
+<h2 id="4-设计演进v1-v4-与-bad-good-schema-design-evolution">4. 设计演进：V1 → V4 与 BAD / GOOD Schema (Design Evolution)</h2>
 <p>AWS 用同一套 K-12 内容搜索后端对照了多种工具设计。这里收敛到工程上最常落地的四档（对应其 V1–V4），并给出可直接改代码的 schema 对照。</p>
 <table>
 <thead>
@@ -218,7 +240,7 @@
 </tbody>
 </table>
 <p>后续还有 Server 侧 introspection（自选小模型解释自然语言 → 推荐 filter）以及 Agent-as-tool（单一自然语言入口，内部自有工具编排）。准确率与一致性更高，但推理成本与延迟归你承担——适合「必须跨客户端模型稳定」的场景。本文聚焦多数团队会先走完的 V1→V4。</p>
-<h3>BAD：开放字符串 + 重叠描述</h3>
+<h3 id="bad开放字符串-重叠描述">BAD：开放字符串 + 重叠描述</h3>
 <pre><code class="language-typescript">// ❌ 合法但错误的温床
 server.tool(
   &quot;update_invoice&quot;,
@@ -248,7 +270,7 @@ server.tool(
   &quot;required&quot;: [&quot;invoiceId&quot;]
 }
 </code></pre>
-<h3>GOOD：互斥描述 + 关闭非法状态 + 默认值</h3>
+<h3 id="good互斥描述-关闭非法状态-默认值">GOOD：互斥描述 + 关闭非法状态 + 默认值</h3>
 <pre><code class="language-typescript">// ✅ 让非法状态不可表示；让路由互斥
 server.tool(
   &quot;update_invoice&quot;,
@@ -319,7 +341,7 @@ server.tool(
 </code></pre>
 <p>经验法则（AWS Prescriptive Guidance 也提到）：单工具参数尽量控制在约 <strong>8 个以内</strong>；响应默认返回决策所需的少量字段，详情另开工具按需拉取（Anthropic 报告过按需详情可砍掉约三分之二 response token；Tool Search / 懒加载定义在大规模场景可把工具定义 token 降到约 15% 量级）。</p>
 <hr />
-<h2>5. 发工具前检查清单 (Pre-Ship Checklist)</h2>
+<h2 id="5-发工具前检查清单-pre-ship-checklist">5. 发工具前检查清单 (Pre-Ship Checklist)</h2>
 <p>注册任何一个 tool 之前，用四类 misuse 逐条过一遍：</p>
 <p><strong>Wrong tool</strong></p>
 <ul>
@@ -348,7 +370,7 @@ server.tool(
 <li>[ ] 工具定义与默认响应是否在「够用」和「不挤爆 context」之间做过取舍；大词表是否可懒加载</li>
 </ul>
 <hr />
-<h2>6. 小结 (Takeaways)</h2>
+<h2 id="6-小结-takeaways">6. 小结 (Takeaways)</h2>
 <p>「合法但错误」不是模型突然变笨，而是工具面把非法状态留在了可表示空间里，又把路由信息写得像两份能互相替代的文档。</p>
 <ul>
 <li><strong>Confusion + Bloat</strong> 是主矛盾：加描述能降 confusion，也会加 bloat；用 schema/enum/defaults 往往能同时改善两者。</li>
@@ -358,7 +380,7 @@ server.tool(
 </ul>
 <p>下一篇会落到两件更「运行时」的事：<strong>trajectory eval</strong>（用近邻任务集量化 wrong-tool / wrong-arg 率，而不是只看单次 demo），以及 <strong>idempotency</strong>（超时、扇出、重试下如何保证写操作只生效一次）。没有这两者，再漂亮的 schema 也会在生产里被双写打穿。</p>
 <hr />
-<h2>参考 (References)</h2>
+<h2 id="参考-references">参考 (References)</h2>
 <ol>
 <li>Daniel Wells, Raian Osman — <a href="https://aws.amazon.com/blogs/machine-learning/mcp-tool-design-practical-approaches-and-tradeoffs/">MCP tool design: Practical approaches and tradeoffs</a> (AWS Machine Learning Blog, 2026-07-09). Confusion / Bloat 框架与 V1–V6 对照。</li>
 <li>berthelius (Frihet) — <a href="https://dev.to/frihet/designing-mcp-tools-an-agent-wont-misuse-1ah1">Designing MCP tools an agent won't misuse</a> (DEV, 2025-08-09). Well-formed wrong 与四类 misuse、enum 约束、annotations、typed errors。</li>
@@ -366,8 +388,9 @@ server.tool(
 <li>arXiv:2602.14878 — <a href="https://arxiv.org/html/2602.14878v1">Model Context Protocol (MCP) Tool Descriptions Are Smelly!</a>. 856 工具 / 103 Server；约 97.1% 描述含至少一种 smell；增强描述的收益与步数 / 回归代价。</li>
 </ol>
 </div>
-<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
+<p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+</div>
 </main>
 <footer class="site-footer">
   <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
@@ -379,6 +402,32 @@ server.tool(
   var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default" });
   mermaid.run({ querySelector: "code.language-mermaid, .mermaid" });
+})();
+</script>
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var map = {};
+  links.forEach(function (a) {
+    var id = decodeURIComponent(a.getAttribute('href').slice(1));
+    if (id) map[id] = a;
+  });
+  var headings = Object.keys(map).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var activeId = null;
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+    links.forEach(function (a) { a.classList.remove('active'); });
+    if (id && map[id]) map[id].classList.add('active');
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    var visible = entries.filter(function (e) { return e.isIntersecting; })
+      .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+    if (visible.length) setActive(visible[0].target.id);
+  }, { rootMargin: '-20% 0px -65% 0px', threshold: [0, 1] });
+  headings.forEach(function (h) { observer.observe(h); });
 })();
 </script>
 </body>
