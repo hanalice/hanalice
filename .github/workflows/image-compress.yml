@@ -1,19 +1,48 @@
 name: Image Compression
 
+# calibreapp/image-actions (non-compressOnly) only accepts pull_request opened/synchronize.
+# Push-to-branch without a PR context fails with: "This action only runs for pushes to PRs".
+# Also: input is GITHUB_TOKEN (not githubToken).
+
 on:
-  push:
+  pull_request:
     paths:
       - 'assets/**'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.png'
+      - '**.webp'
+      - '**.gif'
+      - '**.avif'
+  push:
+    branches:
+      - main
+    paths:
+      - 'assets/**'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.png'
+      - '**.webp'
+      - '**.gif'
+      - '**.avif'
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   compress:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Compress Images
         uses: calibreapp/image-actions@main
         with:
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-          compressOnly: false # 自动提交压缩后的图片
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PR: compress + comment/commit. Push to main: compress only.
+          compressOnly: ${{ github.event_name != 'pull_request' }}
+          ignorePaths: |
+            node_modules/**
+            public/**
