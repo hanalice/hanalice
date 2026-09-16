@@ -2,6 +2,7 @@
 title: MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用
 date: 2026-09-15
 tags: Agent, MCP, Tool-Calling, Schema, Context-Engineering
+description: 给 Agent 接上 MCP Server 后，最常见的失败不是参数校验挂了，而是调用在 schema 上完全合法、在业务上完全错误。拆清 Confusion/Bloat、四类 misuse，以及 Protocol Error 与 isError 的分工。
 ---
 
 ## 1. 问题现象 (Problem Symptoms)

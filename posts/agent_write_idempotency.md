@@ -2,6 +2,7 @@
 title: Agent 写操作的幂等：超时之后凭什么敢重试
 date: 2026-09-16
 tags: Agent, MCP, Idempotency, Tool-Calling, Reliability
+description: 超时不等于没写入。讲清 MCP 写路径上的 idempotency key、错误码分支，以及为何 idempotentHint 不能当成幂等实现——否则 Host 一重试就双写。
 ---
 
 ## 1. 问题现象 (Problem Symptoms)
