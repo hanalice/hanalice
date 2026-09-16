@@ -587,5 +587,94 @@ class TestMermaidSupport(unittest.TestCase):
 
 
 
+
+# ── Pages polish: subtitle, card descriptions, TOC ───────────────────────────
+
+class TestSiteDescription(unittest.TestCase):
+
+    def test_site_description_persona(self):
+        self.assertEqual(sync.SITE_DESCRIPTION, 'Apple-Style Minimalist Developer')
+
+    def test_index_page_sub_uses_site_description(self):
+        html_out = sync._render_index([], {})
+        self.assertIn('Apple-Style Minimalist Developer', html_out)
+        self.assertIn('class="page-sub"', html_out)
+        self.assertIn('name="description" content="Apple-Style Minimalist Developer"', html_out)
+
+
+class TestIndexCardDescription(unittest.TestCase):
+
+    def test_card_includes_description_and_reading_time(self):
+        posts = [{
+            'title': 'Hello Card',
+            'date': '2026-03-01',
+            'tags': ['Git'],
+            'basename': 'hello_card',
+            'description': 'Gray description under the title for the homepage card.',
+            'body': '正文' * 200 + '\n\n' + ('word ' * 50),
+            'path': './posts/hello_card.md',
+        }]
+        html_out = sync._render_index(posts, {'Git': 1})
+        self.assertIn('class="post-card"', html_out)
+        self.assertIn('class="post-desc"', html_out)
+        self.assertIn('Gray description under the title', html_out)
+        self.assertIn('分钟阅读', html_out)
+        self.assertIn('2026-03-01', html_out)
+        # meta → title → desc → tags order
+        meta_i = html_out.find('post-meta-line')
+        title_i = html_out.find('class="post-title"')
+        desc_i = html_out.find('class="post-desc"')
+        tags_i = html_out.find('class="post-tags"')
+        self.assertTrue(meta_i < title_i < desc_i < tags_i)
+
+    def test_estimate_reading_minutes_minimum_one(self):
+        self.assertEqual(sync._estimate_reading_minutes(''), 1)
+        self.assertEqual(sync._estimate_reading_minutes('hi'), 1)
+
+    def test_site_css_has_post_desc_clamp(self):
+        self.assertIn('.post-desc', sync._SITE_CSS)
+        self.assertIn('-webkit-line-clamp', sync._SITE_CSS)
+
+
+class TestArticleToc(unittest.TestCase):
+
+    def _post(self, body):
+        return {
+            'title': 'TOC Demo',
+            'date': '2026-01-01',
+            'tags': ['Test'],
+            'basename': 'toc_demo',
+            'description': 'd',
+            'body': body,
+            'path': './posts/toc_demo.md',
+        }
+
+    def test_toc_generated_when_headings_exist(self):
+        html_out = sync._render_post(self._post(
+            '## Alpha\n\nText.\n\n### Beta nested\n\nMore.\n\n## Gamma\n\nEnd.\n'
+        ))
+        self.assertIn('本文目录', html_out)
+        self.assertIn('class="toc"', html_out)
+        self.assertIn('has-toc', html_out)
+        self.assertIn('1. Alpha', html_out)
+        self.assertIn('— Beta nested', html_out)
+        self.assertIn('2. Gamma', html_out)
+        self.assertIn('id="alpha"', html_out)
+        self.assertIn('href="#alpha"', html_out)
+        self.assertIn('IntersectionObserver', html_out)
+        self.assertIn('返回文章列表', html_out)
+
+    def test_no_toc_when_no_headings(self):
+        html_out = sync._render_post(self._post('Just a plain paragraph.\n'))
+        self.assertNotIn('本文目录', html_out)
+        self.assertNotIn('has-toc', html_out)
+
+    def test_site_css_has_toc_sidebar(self):
+        self.assertIn('.toc', sync._SITE_CSS)
+        self.assertIn('position: sticky', sync._SITE_CSS)
+        self.assertIn('post-layout.has-toc', sync._SITE_CSS)
+
+
+
 if __name__ == '__main__':
     unittest.main()

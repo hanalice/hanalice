@@ -26,12 +26,23 @@
   </nav>
 </header>
 <main class="site-main">
+<div class="post-layout has-toc">
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h3"><a href="#链式调用">— 链式调用</a></li>
+<li class="toc-h3"><a href="#可以将http当做函数来使用获取mockup的json数据">— 可以将$http当做函数来使用，获取mockup的json数据</a></li>
+<li class="toc-h3"><a href="#响应对象">— 响应对象</a></li>
+<li class="toc-h3"><a href="#缓存http请求">— 缓存HTTP请求</a></li>
+</ol>
+</nav>
 <article>
+<p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">AngularJS中$http服务的简单用法</h1>
-<div class="post-meta"><time datetime="2017-09-22">2017-09-22</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/AngularJS.html" data-tag="AngularJS">#AngularJS</a><a class="tag-chip" href="/hanalice/tags/Http.html" data-tag="Http">#Http</a></div></div>
+<div class="post-meta"><time datetime="2017-09-22">2017-09-22</time><span class="reading-time">2 分钟阅读</span><div class="tags"><a class="tag-chip" href="/hanalice/tags/AngularJS.html" data-tag="AngularJS">#AngularJS</a><a class="tag-chip" href="/hanalice/tags/Http.html" data-tag="Http">#Http</a></div></div>
 <div class="prose">
 <p>我们可以使用内置的$http服务直接同外部进行通信。$http服务只是简单的封装了浏览器原生的XMLHttpRequest对象。</p>
-<h3>链式调用</h3>
+<h3 id="链式调用">链式调用</h3>
 <p>$http服务是只能接受一个参数的函数，这个参数是一个对象，包含了用来生成HTTP请求的
 配置内容。这个函数返回一个promise对象，具有success和error两个方法。相当于预定义两个方法，成功的时候执行什么，失败的时候执行什么，并不是同时执行的。</p>
 <pre><code>$http({
@@ -44,7 +55,7 @@ method:'GET'
 //处理响应失败
 });
 </code></pre>
-<h3>可以将$http当做函数来使用，获取mockup的json数据</h3>
+<h3 id="可以将http当做函数来使用获取mockup的json数据">可以将$http当做函数来使用，获取mockup的json数据</h3>
 <pre><code>$http({
 method:'GET',
 url:'/api/users.json',
@@ -71,7 +82,7 @@ this.getUsers = function () {
 </code></pre>
 <p>④data(字符串或者对象)
 这个对象中包含了将会被当作消息体发送给服务器的数据。通常在发送POST请求时使用。</p>
-<h3>响应对象</h3>
+<h3 id="响应对象">响应对象</h3>
 <p>AngularJS传递给then（）方法的响应对象包含了四个属性。<br />
 ◇data
 这个数据代表转换过后的响应体（如果定义了转换的话）<br />
@@ -93,7 +104,7 @@ resp.headers('X-Auth-ID');
 <p>◇statusText（字符串）
 这个字符串是响应的HTTP状态文本。</p>
 <p><strong>success(), error()和then()的区别在于，success和error返回了处理过的数据，没有status和headers,只有具体的data对象</strong></p>
-<h3>缓存HTTP请求</h3>
+<h3 id="缓存http请求">缓存HTTP请求</h3>
 <p>默认情况下，$http服务不会对请求进行本地缓存。在发送单独的请求时，我们可以通过向$http请求传入一个布尔值或者一个缓存实例来启用缓存。</p>
 <pre><code>$http.get('/api/users.json',{ cache: true })
 .success(function(data) {})
@@ -102,12 +113,38 @@ resp.headers('X-Auth-ID');
 <p>第一次发送请求时，$http服务会向/api/users.json发送一个GET请求。第二次发送同一个GET请求时，$http服务会从缓存中取回请求的结果，而不会真的发送一个HTTP GET请求。
 在这个例子里，由于设置了启用缓存，AngularJS默认会使用$cacheFactory,这个服务是AngularJS在启动时自动创建的。如果想要对AngularJS使用的缓存进行更多的自定义控制，可以向请求传入一个自定义的缓存实例代替true。</p>
 </div>
-<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
+<p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+</div>
 </main>
 <footer class="site-footer">
   <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
-
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var map = {};
+  links.forEach(function (a) {
+    var id = decodeURIComponent(a.getAttribute('href').slice(1));
+    if (id) map[id] = a;
+  });
+  var headings = Object.keys(map).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var activeId = null;
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+    links.forEach(function (a) { a.classList.remove('active'); });
+    if (id && map[id]) map[id].classList.add('active');
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    var visible = entries.filter(function (e) { return e.isIntersecting; })
+      .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+    if (visible.length) setActive(visible[0].target.id);
+  }, { rootMargin: '-20% 0px -65% 0px', threshold: [0, 1] });
+  headings.forEach(function (h) { observer.observe(h); });
+})();
+</script>
 </body>
 </html>

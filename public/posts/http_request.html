@@ -26,11 +26,19 @@
   </nav>
 </header>
 <main class="site-main">
+<div class="post-layout has-toc">
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h2"><a href="#http-请求">1. http 请求</a></li>
+</ol>
+</nav>
 <article>
+<p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">Http请求常用方法解释</h1>
-<div class="post-meta"><time datetime="2024-09-19">2024-09-19</time><div class="tags"><a class="tag-chip" href="/hanalice/tags/Http.html" data-tag="Http">#Http</a></div></div>
+<div class="post-meta"><time datetime="2024-09-19">2024-09-19</time><span class="reading-time">1 分钟阅读</span><div class="tags"><a class="tag-chip" href="/hanalice/tags/Http.html" data-tag="Http">#Http</a></div></div>
 <div class="prose">
-<h2>http 请求</h2>
+<h2 id="http-请求">http 请求</h2>
 <ul>
 <li>HEAD<br />
 HEAD方法跟GET方法相同，只不过服务器响应时不会返回消息体。一个HEAD请求的响应中，HTTP头中包含的元信息应该和一个GET请求的响应消息相同。这种方法可以用来获取请求中隐含的元信息，而不用传输实体本身。也经常用来测试超链接的有效性、可用性和最近的修改。</li>
@@ -50,12 +58,38 @@ PATCH请求用来向服务器发送数据，和PUT请求类似，但是PATCH支�
 DELETE请求用来删除某一个资源的，该请求就像数据库的delete操作。</li>
 </ul>
 </div>
-<p class="back"><a href="/hanalice/">&larr; Back to posts</a></p>
+<p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+</div>
 </main>
 <footer class="site-footer">
   <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
-
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var map = {};
+  links.forEach(function (a) {
+    var id = decodeURIComponent(a.getAttribute('href').slice(1));
+    if (id) map[id] = a;
+  });
+  var headings = Object.keys(map).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var activeId = null;
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+    links.forEach(function (a) { a.classList.remove('active'); });
+    if (id && map[id]) map[id].classList.add('active');
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    var visible = entries.filter(function (e) { return e.isIntersecting; })
+      .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+    if (visible.length) setActive(visible[0].target.id);
+  }, { rootMargin: '-20% 0px -65% 0px', threshold: [0, 1] });
+  headings.forEach(function (h) { observer.observe(h); });
+})();
+</script>
 </body>
 </html>
