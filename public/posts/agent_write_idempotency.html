@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent 写操作的幂等：超时之后凭什么敢重试 · hanalice</title>
-<meta name="description" content="1. 问题现象 Problem Symptoms">
+<meta name="description" content="上一篇工具面讲过现象 C：createorder 超时，模型分不清「已落库但响应丢了」和「根本没写成功」，再调一次就双写。评估面也提过：空转重试在终答绿灯下仍可能把副作用放大。本文只钉写路径重试语义——不是 Temporal / checkpoint 教程，也不是 durable execution 全景；那些是进程…">
 <link rel="canonical" href="https://hanalice.github.io/hanalice/posts/agent_write_idempotency.html">
 <meta property="og:title" content="Agent 写操作的幂等：超时之后凭什么敢重试 · hanalice">
-<meta property="og:description" content="1. 问题现象 Problem Symptoms">
+<meta property="og:description" content="上一篇工具面讲过现象 C：createorder 超时，模型分不清「已落库但响应丢了」和「根本没写成功」，再调一次就双写。评估面也提过：空转重试在终答绿灯下仍可能把副作用放大。本文只钉写路径重试语义——不是 Temporal / checkpoint 教程，也不是 durable execution 全景；那些是进程…">
 <meta property="og:url" content="https://hanalice.github.io/hanalice/posts/agent_write_idempotency.html">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="hanalice">
@@ -413,8 +413,8 @@ async function callCreateOrder(intent: { sku: string; qty: number }, taskId: str
 <h2>参考 (References)</h2>
 <ol>
 <li>Model Context Protocol — <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools (specification 2025-06-18)</a>；<a href="https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations">schema：<code>Tool</code> / <code>ToolAnnotations</code></a>. <code>idempotentHint</code> 等 annotations 为 untrusted hints；与 <code>tools/list</code> 同级返回。</li>
-<li>本站 — <a href="/hanalice/posts/mcp_tool_design_valid_but_wrong.md">MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用</a> 现象 C（超时重试双写）与 annotations 边界。</li>
-<li>本站 — <a href="/hanalice/posts/trajectory_eval_false_green.md">Trajectory Eval：答对了为什么还是假绿</a>（路径上的重试与副作用需进评估门）。</li>
+<li>本站 — <a href="/hanalice/posts/mcp_tool_design_valid_but_wrong.html">MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用</a> 现象 C（超时重试双写）与 annotations 边界。</li>
+<li>本站 — <a href="/hanalice/posts/trajectory_eval_false_green.html">Trajectory Eval：答对了为什么还是假绿</a>（路径上的重试与副作用需进评估门）。</li>
 <li>Stripe Docs — <a href="https://docs.stripe.com/api/idempotent_requests">Idempotent requests</a>（Idempotency-Key：同键同体 replay、同键异体冲突；分布式写重试惯例，非 MCP 专有）。</li>
 <li>berthelius (Frihet) — <a href="https://dev.to/frihet/designing-mcp-tools-an-agent-wont-misuse-1ah1">Designing MCP tools an agent won't misuse</a>（Can't recover / typed errors / annotations 与 enforcement 分工）。</li>
 </ol>

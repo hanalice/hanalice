@@ -397,6 +397,110 @@ class TestExportStaticSite(unittest.TestCase):
             self.assertEqual(result['basename'], 'post')
 
 
+# ── Pages polish: excerpt skips headings; posts/*.md → .html ─────────────────
+
+class TestFirstParagraphExcerpt(unittest.TestCase):
+
+    def test_skips_markdown_heading_paragraph(self):
+        body = (
+            "## 1. 问题现象 (Problem Symptoms)\n\n"
+            "上一篇工具面讲过现象 C：超时之后凭什么敢重试。\n\n"
+            "More prose here.\n"
+        )
+        excerpt = sync._first_paragraph_excerpt(body)
+        self.assertNotIn('问题现象', excerpt)
+        self.assertTrue(excerpt.startswith('上一篇'))
+
+    def test_skips_heading_then_takes_prose(self):
+        body = "### 问题描述\n\n在 WSL 环境下，使用 pnpm 安装后构建失败。\n"
+        excerpt = sync._first_paragraph_excerpt(body)
+        self.assertNotEqual(excerpt, '问题描述')
+        self.assertIn('WSL', excerpt)
+
+    def test_parse_post_description_skips_heading(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'post.md')
+            _write(
+                p,
+                "---\n"
+                "title: T\n"
+                "date: 2026-01-01\n"
+                "---\n\n"
+                "## 1. 问题现象 Problem Symptoms\n\n"
+                "Real prose paragraph about the bug.\n",
+            )
+            result = sync.parse_post(p)
+            self.assertIsNotNone(result)
+            self.assertNotIn('问题现象', result['description'])
+            self.assertIn('Real prose', result['description'])
+
+
+class TestRewritePostMdLinks(unittest.TestCase):
+
+    def test_rewrites_site_posts_md_to_html(self):
+        html_in = (
+            '<p><a href="/hanalice/posts/foo.md">a</a> '
+            '<a href="posts/bar.md">b</a> '
+            '<a href="../posts/baz.md#sec">c</a></p>'
+        )
+        out = sync._rewrite_post_md_links(html_in)
+        self.assertIn('/hanalice/posts/foo.html', out)
+        self.assertIn('posts/bar.html', out)
+        self.assertIn('../posts/baz.html#sec', out)
+        self.assertNotIn('posts/foo.md', out)
+        self.assertNotIn('posts/bar.md', out)
+
+    def test_leaves_non_posts_md_alone(self):
+        html_in = '<a href="https://example.com/x.md">ext</a> <a href="notes/x.md">n</a>'
+        out = sync._rewrite_post_md_links(html_in)
+        self.assertIn('https://example.com/x.md', out)
+        self.assertIn('notes/x.md', out)
+
+    def test_render_post_rewrites_in_article_links(self):
+        post = {
+            'title': 'T',
+            'date': '2026-01-01',
+            'tags': ['Git'],
+            'description': 'desc',
+            'body': 'See [other](posts/other_post.md) for details.\n',
+            'basename': 't',
+            'path': './posts/t.md',
+        }
+        html_out = sync._render_post(post)
+        self.assertIn('posts/other_post.html', html_out)
+        self.assertNotIn('posts/other_post.md', html_out)
+
+
+class TestIndexTagPolish(unittest.TestCase):
+
+    def test_post_tag_chips_overflow(self):
+        html_out = sync._post_tag_chips_html(
+            ['A', 'B', 'C', 'D'], max_visible=3, overflow_href='/hanalice/posts/x.html'
+        )
+        self.assertEqual(html_out.count('class="tag-chip"'), 3)
+        self.assertIn('+1', html_out)
+        self.assertIn('tag-more', html_out)
+
+    def test_index_shows_top_tags_and_more_link(self):
+        all_tags = {f'Tag{i}': (20 - i) for i in range(15)}
+        posts = [{
+            'title': 'Hello',
+            'date': '2026-01-01',
+            'tags': ['Tag0', 'Tag1', 'Tag2', 'Tag3'],
+            'basename': 'hello',
+            'description': 'd',
+            'body': 'body',
+            'path': './posts/hello.md',
+        }]
+        html_out = sync._render_index(posts, all_tags)
+        self.assertIn('data-filter="all"', html_out)
+        self.assertIn('tag-chip-more', html_out)
+        self.assertIn('更多', html_out)
+        self.assertIn('/hanalice/tags/', html_out)
+        self.assertIn('data-filter="Tag0"', html_out)
+        self.assertNotIn('data-filter="Tag14"', html_out)
+        self.assertIn('+1', html_out)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -194,6 +194,15 @@ button.tag-chip:hover { background: #dcdce0; }
   font-size: 0.72rem;
   padding: 0.22rem 0.65rem;
 }
+.post-list .post-tags .tag-more {
+  font-size: 0.72rem;
+  color: var(--muted);
+  padding: 0.22rem 0.35rem;
+  text-decoration: none;
+  align-self: center;
+}
+a.tag-more:hover { color: var(--fg); text-decoration: none; }
+a.tag-chip-more { font-weight: 600; }
 .empty-filter {
   display: none;
   color: var(--muted);
