@@ -24,14 +24,15 @@
 - **已发文：** posts/trajectory_eval_false_green.md
 - **备注：** Reviewer approved; Alice 批准 push 2026-09-15。系列下一坑：agent-write-idempotency
 
-### [ready] 2026-09-15 | P0 | agent-write-idempotency
+### [published] 2026-09-16 | P0 | agent-write-idempotency
 - **工作标题：** Agent 写操作的幂等：超时之后凭什么敢重试
 - **失败面：** timeout 后二次 create 导致双写
 - **为何够深：** idempotency key、错误码分支、与 MCP annotations 的关系
 - **拟用案例 / 对照：** create_order 超时 vs 带 key 的安全重试
 - **相关已发文：** mcp_tool_design_valid_but_wrong.md 现象 C
 - **参考线索：** MCP tool annotations；分布式系统幂等惯例
-- **备注：**
+- **已发文：** posts/agent_write_idempotency.md
+- **备注：** Reviewer approved; Alice 批准 push 2026-09-16。系列下一坑：long-horizon-decisive-error
 
 ### [ready] 2026-09-15 | P1 | long-horizon-decisive-error
 - **工作标题：** 长程 Agent：第一个错 vs 决定性错误
@@ -78,12 +79,17 @@
 
 ### [idea] 2026-09-15 | P2 | mcp-progressive-disclosure
 - **工作标题：** 工具一多就选错：渐进发现 vs 一次灌进全部 MCP
-- **失败面：** context bloat → 错工具 → 重试再污染
-- **为何够深：** 接续 Confusion+Bloat，专讲 discovery 策略
-- **拟用案例 / 对照：** get_taxonomy / tool search 前后 token 与选对率
-- **相关已发文：** mcp_tool_design_valid_but_wrong.md
-- **参考线索：** AWS MCP tool design V4；Anthropic tool search
-- **备注：**
+- **失败面：** context bloat → 错工具 → 重试再污染（当前仍等于范文 Confusion+Bloat）
+- **为何够深：** 尚未过门槛——需要 Host discovery 层失败面（search recall miss / taxonomy skip / 中途注入打断 prompt cache），而非再讲 dump-all vs lazy
+- **拟用案例 / 对照：** 待重框：retrieval@k vs selection accuracy；defer_loading / catalog→inspect→execute；非 V1–V4 复述
+- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（已含 V4 get_taxonomy + Tool Search 数字）
+- **参考线索：**
+  - https://www.anthropic.com/engineering/advanced-tool-use — Tool Search ~77K→8.7K；Opus 4 49%→74%
+  - https://www.anthropic.com/engineering/code-execution-with-mcp — filesystem disclosure 150K→2K
+  - https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool — defer_loading；≥10 tools / >10K def tokens
+  - https://aws.amazon.com/blogs/machine-learning/mcp-tool-design-practical-approaches-and-tradeoffs/ — V4 lazy get_taxonomy（范文已用）
+  - https://modelcontextprotocol.io/docs/2024-11-05/develop/clients/client-best-practices — Catalog→Inspect→Execute；mid-turn tools 变数组打断 cache
+- **备注：** Gate FAIL for ready — 失败面仍 = Confusion+Bloat / V4 已在范文。保持 idea。升 ready 条件：重框为 discovery-miss / runtime disclosure（recall miss、taxonomy skip、cache break），并有 retrieval@k 对照。不强行升。
 
 ### [published] 2026-09-15 | P0 | mcp-valid-but-wrong
 - **工作标题：** MCP 工具设计：合法但错误的调用
@@ -100,3 +106,5 @@
 - 2026-09-15 Scout: upgraded `long-horizon-decisive-error` idea→ready (HORIZON / Who&When / FALAT / Point-of-Commitment); AURA-Eval secondary.
 - 2026-09-15 Scout: upgraded `durable-agent-execution` idea→ready (checkpoint ≠ durable execution; LangGraph interrupt reentry + Temporal Signal HITL); distinct from agent-write-idempotency.
 - 2026-09-15 Coordinator: published `trajectory-eval-false-green` → posts/trajectory_eval_false_green.md (Alice 批准 push).
+- 2026-09-15 Scout: kept `mcp-progressive-disclosure` as idea (gate FAIL — duplicates published Confusion+Bloat; wait for discovery-layer pit).
+- 2026-09-16 Coordinator: published `agent-write-idempotency` → posts/agent_write_idempotency.md (Alice 批准 push).
