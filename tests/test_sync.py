@@ -502,5 +502,90 @@ class TestIndexTagPolish(unittest.TestCase):
         self.assertIn('+1', html_out)
 
 
+
+# ── Pages polish P2: nav active, dark mode CSS, mermaid ──────────────────────
+
+class TestNavActiveState(unittest.TestCase):
+
+    def test_posts_index_marks_posts_active(self):
+        html_out = sync._render_index([], {})
+        self.assertIn('class="active">Posts</a>', html_out)
+        self.assertNotIn('class="active">Tags</a>', html_out)
+
+    def test_tags_index_and_detail_mark_tags_active(self):
+        ti = sync._render_tags_index({'Git': 1})
+        self.assertIn('class="active">Tags</a>', ti)
+        self.assertNotIn('class="active">Posts</a>', ti)
+        post = {
+            'title': 'T',
+            'date': '2026-01-01',
+            'tags': ['Git'],
+            'basename': 't',
+            'description': 'd',
+            'body': 'body',
+            'path': './posts/t.md',
+        }
+        tp = sync._render_tag_page('Git', [post], 1)
+        self.assertIn('class="active">Tags</a>', tp)
+        self.assertNotIn('class="active">Posts</a>', tp)
+
+    def test_article_page_marks_neither_posts_nor_tags(self):
+        post = {
+            'title': 'T',
+            'date': '2026-01-01',
+            'tags': ['Git'],
+            'basename': 't',
+            'description': 'd',
+            'body': 'Just prose.\n',
+            'path': './posts/t.md',
+        }
+        html_out = sync._render_post(post)
+        nav = html_out.split('nav-links', 1)[1].split('</ul>', 1)[0]
+        self.assertNotIn('class="active"', nav)
+
+
+class TestDarkModeCss(unittest.TestCase):
+
+    def test_site_css_has_prefers_color_scheme_dark(self):
+        self.assertIn('@media (prefers-color-scheme: dark)', sync._SITE_CSS)
+        self.assertIn('--bg: #000000', sync._SITE_CSS)
+        self.assertIn('--card: #1d1d1f', sync._SITE_CSS)
+        # Light theme remains the default :root
+        self.assertIn('--bg: #f5f5f7', sync._SITE_CSS)
+
+
+class TestMermaidSupport(unittest.TestCase):
+
+    def _post(self, body):
+        return {
+            'title': 'Diagram',
+            'date': '2026-01-01',
+            'tags': ['Test'],
+            'basename': 'diagram',
+            'description': 'd',
+            'body': body,
+            'path': './posts/diagram.md',
+        }
+
+    def test_detects_mermaid_fence(self):
+        self.assertTrue(sync._content_has_mermaid("```mermaid\nflowchart LR\nA-->B\n```\n"))
+        self.assertTrue(sync._content_has_mermaid('', '<pre><code class="language-mermaid">x</code></pre>'))
+        self.assertFalse(sync._content_has_mermaid("```python\nprint(1)\n```\n"))
+
+    def test_render_post_includes_mermaid_only_when_needed(self):
+        with_m = sync._render_post(self._post(
+            "Intro\n\n```mermaid\nflowchart LR\nA-->B\n```\n"
+        ))
+        self.assertIn(sync.MERMAID_CDN, with_m)
+        self.assertIn('mermaid.initialize', with_m)
+        self.assertIn('mermaid.run', with_m)
+        self.assertIn('language-mermaid', with_m)
+
+        without = sync._render_post(self._post('No diagrams, only `code`.\n'))
+        self.assertNotIn('mermaid.min.js', without)
+        self.assertNotIn('mermaid.initialize', without)
+
+
+
 if __name__ == '__main__':
     unittest.main()

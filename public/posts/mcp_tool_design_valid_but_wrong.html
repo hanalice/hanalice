@@ -12,14 +12,14 @@
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="hanalice">
 <link rel="stylesheet" href="/hanalice/assets/site.css">
-
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 </head>
 <body>
 <header class="site-header">
   <nav class="site-nav" aria-label="Primary">
     <a class="site-title" href="/hanalice/">hanalice</a>
     <ul class="nav-links">
-      <li><a href="/hanalice/" class="active">Posts</a></li>
+      <li><a href="/hanalice/">Posts</a></li>
       <li><a href="/hanalice/tags/">Tags</a></li>
       <li><a href="https://github.com/hanalice/hanalice" rel="noopener noreferrer" target="_blank">GitHub</a></li>
     </ul>
@@ -372,6 +372,14 @@ server.tool(
 <footer class="site-footer">
   <p><a href="/hanalice/">Home</a> &middot; <a href="/hanalice/tags/">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>
 </footer>
-
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js"></script>
+<script>
+(function () {
+  if (typeof mermaid === "undefined") return;
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default" });
+  mermaid.run({ querySelector: "code.language-mermaid, .mermaid" });
+})();
+</script>
 </body>
 </html>
