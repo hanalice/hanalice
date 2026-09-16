@@ -1,6 +1,7 @@
 .agents/
 .claude/
 .cursor/
+public/
 CLAUDE.md
 *.pyc
 .venv/

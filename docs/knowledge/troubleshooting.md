@@ -16,5 +16,23 @@
 
 ---
 
+## 案例 2：文章页导航与正文左右对不齐
+
+*   **现象 (Symptom)**：单篇博文页上，「hanalice」比正文更靠右；右侧目录超出导航「GitHub」的右缘。
+*   **根本原因 (Root Cause)**：导航 / 页脚仍用 `--max: 980px`，带目录的 `.site-main--with-toc` 却是 `1180px`，居中后左右各偏约 100px。
+*   **解决方案 (Solution)**：有目录的文章给 `body` 加上 `has-toc-layout`，让 `.site-nav`、`.site-main--with-toc`、`.site-footer` 共用 `--max-with-toc`。
+*   **预防与规范**：加宽正文容器时，同步加宽同一页的 nav / footer，或抽成同一个 max-width 变量。
+
+---
+
+## 案例 3：`.gitignore` 写了 `public/`，git log / status 仍出现 public 改动
+
+*   **现象 (Symptom)**：`.gitignore` 已包含 `public/`，但 `git status` 仍列出 `public/**`，`git log -- public` 也能看到历史提交。
+*   **根本原因 (Root Cause)**：gitignore 只阻止**未跟踪**文件被加入；已经 commit 过的文件会继续被跟踪。历史提交也不会被 gitignore 改写。
+*   **解决方案 (Solution)**：`git rm -r --cached public/` 从索引移除（保留工作区文件）。Pages 改由 `pages.yml` 在 CI 里跑 `sync.py` 再上传 artifact，不再把 `public/` commit 回仓库。
+*   **预防与规范**：生成产物进 `.gitignore` 的同时，必须从索引撤跟踪，并改掉 `git add public/` 的流水线。不要用历史改写去“擦掉 git log”，除非明确要求 force-push。
+
+---
+
 > **给 AI 的提示 (Note for Antigravity)**: 
 > 任何新的未知故障处理完毕后，请按照上述 `现象、根本原因、解决方案、预防` 的格式，增补到本文件底部。

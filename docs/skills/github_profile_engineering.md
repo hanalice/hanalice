@@ -115,4 +115,4 @@
 ## 9. 安全与未来扩展 (Security & Scalability)
 *   **最小权限原则 (Least Privilege)：** 所有 GitHub Actions 文件必须显式声明所需的最小 `permissions`（如只读、只写 issue 等），严禁授予默认全局权限。
 *   **Secrets：** 所有未来涉及 API 的 Token 必须存放在 GitHub Secrets 中。
-*   **双站并行（预留）：** 结构上支持未来一键部署至 GitHub Pages 变成动态 Web App。
+*   **双站并行：** GitHub Pages 由 Actions 现场编译 `public/` 后上传 artifact，`public/` 不入库。
