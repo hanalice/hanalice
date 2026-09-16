@@ -25,63 +25,8 @@
     </ul>
   </nav>
 </header>
-<main class="site-main">
+<main class="site-main site-main--with-toc">
 <div class="post-layout has-toc">
-<nav class="toc" aria-label="本文目录">
-<p class="toc-title">本文目录</p>
-<ol class="toc-list">
-<li class="toc-h2"><a href="#目录">1. 目录</a></li>
-<li class="toc-h2"><a href="#1-环境准备">2. 1. 环境准备</a></li>
-<li class="toc-h3"><a href="#11-开启-wsl2-并安装-ubuntu">— 1.1 开启 WSL2 并安装 Ubuntu</a></li>
-<li class="toc-h3"><a href="#12-安装-nodejs使用-nvm">— 1.2 安装 Node.js（使用 nvm）</a></li>
-<li class="toc-h3"><a href="#13-安装必要工具">— 1.3 安装必要工具</a></li>
-<li class="toc-h2"><a href="#2-安装-ollamawindows-端">3. 2. 安装 Ollama（Windows 端）</a></li>
-<li class="toc-h3"><a href="#21-下载安装">— 2.1 下载安装</a></li>
-<li class="toc-h3"><a href="#22-配置监听地址关键步骤">— 2.2 配置监听地址（关键步骤）</a></li>
-<li class="toc-h3"><a href="#23-放行防火墙">— 2.3 放行防火墙</a></li>
-<li class="toc-h3"><a href="#24-下载模型">— 2.4 下载模型</a></li>
-<li class="toc-h3"><a href="#25-验证安装">— 2.5 验证安装</a></li>
-<li class="toc-h2"><a href="#3-安装-docker-desktop可选但推荐">4. 3. 安装 Docker Desktop（可选但推荐）</a></li>
-<li class="toc-h3"><a href="#31-下载安装">— 3.1 下载安装</a></li>
-<li class="toc-h3"><a href="#32-配置-wsl-集成解决网络问题">— 3.2 配置 WSL 集成（解决网络问题）</a></li>
-<li class="toc-h3"><a href="#33-验证">— 3.3 验证</a></li>
-<li class="toc-h2"><a href="#4-安装-openclawwsl-端">5. 4. 安装 OpenClaw（WSL 端）</a></li>
-<li class="toc-h3"><a href="#41-一键安装">— 4.1 一键安装</a></li>
-<li class="toc-h3"><a href="#42-验证安装">— 4.2 验证安装</a></li>
-<li class="toc-h3"><a href="#43-创建配置目录">— 4.3 创建配置目录</a></li>
-<li class="toc-h2"><a href="#5-网络打通wsl-访问-windows-ollama">6. 5. 网络打通：WSL 访问 Windows Ollama</a></li>
-<li class="toc-h3"><a href="#51-方案一使用-hostdockerinternal强烈推荐">— 5.1 方案一：使用 host.docker.internal（强烈推荐）</a></li>
-<li class="toc-h3"><a href="#52-方案二使用-wsl-默认网关-ip">— 5.2 方案二：使用 WSL 默认网关 IP</a></li>
-<li class="toc-h3"><a href="#53-方案三启用-wsl-镜像网络模式win11-22h2">— 5.3 方案三：启用 WSL 镜像网络模式（Win11 22H2+）</a></li>
-<li class="toc-h2"><a href="#6-配置-openclaw">7. 6. 配置 OpenClaw</a></li>
-<li class="toc-h3"><a href="#61-编辑配置文件">— 6.1 编辑配置文件</a></li>
-<li class="toc-h3"><a href="#62-最小配置模板使用-openai-兼容模式---推荐">— 6.2 最小配置模板（使用 OpenAI 兼容模式 - 推荐）</a></li>
-<li class="toc-h3"><a href="#63-配置文件说明">— 6.3 配置文件说明</a></li>
-<li class="toc-h2"><a href="#7-启动与测试">8. 7. 启动与测试</a></li>
-<li class="toc-h3"><a href="#71-启动网关">— 7.1 启动网关</a></li>
-<li class="toc-h3"><a href="#72-测试对话">— 7.2 测试对话</a></li>
-<li class="toc-h3"><a href="#73-验证模型调用">— 7.3 验证模型调用</a></li>
-<li class="toc-h2"><a href="#8-踩坑与解决">9. 8. 踩坑与解决</a></li>
-<li class="toc-h3"><a href="#81-端口-11434-被占用">— 8.1 端口 11434 被占用</a></li>
-<li class="toc-h3"><a href="#82-wsl-curl-通但-openclaw-报-fetch-failed">— 8.2 WSL curl 通但 OpenClaw 报 fetch failed</a></li>
-<li class="toc-h3"><a href="#83-hostdockerinternal-域名无法解析">— 8.3 host.docker.internal 域名无法解析</a></li>
-<li class="toc-h3"><a href="#84-网关启动失败gateway-mode-not-set">— 8.4 网关启动失败：gateway mode not set</a></li>
-<li class="toc-h3"><a href="#85-curl-ollama-chat-api-可以正常返回但是openclaw-agent-提示卡死连接超时">— 8.5 curl ollama chat api 可以正常返回，但是openclaw Agent 提示卡死连接超时</a></li>
-<li class="toc-h3"><a href="#86-会话文件锁冲突报错">— 8.6 会话文件锁冲突报错</a></li>
-<li class="toc-h3"><a href="#87-网关抛出认证错误">— 8.7 网关抛出认证错误</a></li>
-<li class="toc-h3"><a href="#88-curl-直接调用快但使用-openclaw-慢">— 8.8 curl 直接调用快，但使用 OpenClaw 慢</a></li>
-<li class="toc-h2"><a href="#9-性能优化建议">10. 9. 性能优化建议</a></li>
-<li class="toc-h3"><a href="#91-选择合适模型">— 9.1 选择合适模型</a></li>
-<li class="toc-h3"><a href="#92-启用-gpu-加速nvidia-设备">— 9.2 启用 GPU 加速（NVIDIA 设备）</a></li>
-<li class="toc-h3"><a href="#93-调整-ollama-上下文窗口">— 9.3 调整 Ollama 上下文窗口</a></li>
-<li class="toc-h3"><a href="#94-openclaw-性能调优">— 9.4 OpenClaw 性能调优</a></li>
-<li class="toc-h2"><a href="#10-最终配置参考">11. 10. 最终配置参考</a></li>
-<li class="toc-h3"><a href="#101-完整配置文件-openclawopenclawjson">— 10.1 完整配置文件 ~/.openclaw/openclaw.json</a></li>
-<li class="toc-h3"><a href="#102-快速测试命令">— 10.2 快速测试命令</a></li>
-<li class="toc-h3"><a href="#103-故障排查流程">— 10.3 故障排查流程</a></li>
-<li class="toc-h2"><a href="#附录常用命令速查">12. 附录：常用命令速查</a></li>
-</ol>
-</nav>
 <article>
 <p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">Windows 环境部署 OpenClaw + Ollama 完整指南</h1>
@@ -618,6 +563,61 @@ openclaw dashboard
 </div>
 <p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h2"><a href="#目录">1. 目录</a></li>
+<li class="toc-h2"><a href="#1-环境准备">1. 环境准备</a></li>
+<li class="toc-h3"><a href="#11-开启-wsl2-并安装-ubuntu">— 1.1 开启 WSL2 并安装 Ubuntu</a></li>
+<li class="toc-h3"><a href="#12-安装-nodejs使用-nvm">— 1.2 安装 Node.js（使用 nvm）</a></li>
+<li class="toc-h3"><a href="#13-安装必要工具">— 1.3 安装必要工具</a></li>
+<li class="toc-h2"><a href="#2-安装-ollamawindows-端">2. 安装 Ollama（Windows 端）</a></li>
+<li class="toc-h3"><a href="#21-下载安装">— 2.1 下载安装</a></li>
+<li class="toc-h3"><a href="#22-配置监听地址关键步骤">— 2.2 配置监听地址（关键步骤）</a></li>
+<li class="toc-h3"><a href="#23-放行防火墙">— 2.3 放行防火墙</a></li>
+<li class="toc-h3"><a href="#24-下载模型">— 2.4 下载模型</a></li>
+<li class="toc-h3"><a href="#25-验证安装">— 2.5 验证安装</a></li>
+<li class="toc-h2"><a href="#3-安装-docker-desktop可选但推荐">3. 安装 Docker Desktop（可选但推荐）</a></li>
+<li class="toc-h3"><a href="#31-下载安装">— 3.1 下载安装</a></li>
+<li class="toc-h3"><a href="#32-配置-wsl-集成解决网络问题">— 3.2 配置 WSL 集成（解决网络问题）</a></li>
+<li class="toc-h3"><a href="#33-验证">— 3.3 验证</a></li>
+<li class="toc-h2"><a href="#4-安装-openclawwsl-端">4. 安装 OpenClaw（WSL 端）</a></li>
+<li class="toc-h3"><a href="#41-一键安装">— 4.1 一键安装</a></li>
+<li class="toc-h3"><a href="#42-验证安装">— 4.2 验证安装</a></li>
+<li class="toc-h3"><a href="#43-创建配置目录">— 4.3 创建配置目录</a></li>
+<li class="toc-h2"><a href="#5-网络打通wsl-访问-windows-ollama">5. 网络打通：WSL 访问 Windows Ollama</a></li>
+<li class="toc-h3"><a href="#51-方案一使用-hostdockerinternal强烈推荐">— 5.1 方案一：使用 host.docker.internal（强烈推荐）</a></li>
+<li class="toc-h3"><a href="#52-方案二使用-wsl-默认网关-ip">— 5.2 方案二：使用 WSL 默认网关 IP</a></li>
+<li class="toc-h3"><a href="#53-方案三启用-wsl-镜像网络模式win11-22h2">— 5.3 方案三：启用 WSL 镜像网络模式（Win11 22H2+）</a></li>
+<li class="toc-h2"><a href="#6-配置-openclaw">6. 配置 OpenClaw</a></li>
+<li class="toc-h3"><a href="#61-编辑配置文件">— 6.1 编辑配置文件</a></li>
+<li class="toc-h3"><a href="#62-最小配置模板使用-openai-兼容模式---推荐">— 6.2 最小配置模板（使用 OpenAI 兼容模式 - 推荐）</a></li>
+<li class="toc-h3"><a href="#63-配置文件说明">— 6.3 配置文件说明</a></li>
+<li class="toc-h2"><a href="#7-启动与测试">7. 启动与测试</a></li>
+<li class="toc-h3"><a href="#71-启动网关">— 7.1 启动网关</a></li>
+<li class="toc-h3"><a href="#72-测试对话">— 7.2 测试对话</a></li>
+<li class="toc-h3"><a href="#73-验证模型调用">— 7.3 验证模型调用</a></li>
+<li class="toc-h2"><a href="#8-踩坑与解决">8. 踩坑与解决</a></li>
+<li class="toc-h3"><a href="#81-端口-11434-被占用">— 8.1 端口 11434 被占用</a></li>
+<li class="toc-h3"><a href="#82-wsl-curl-通但-openclaw-报-fetch-failed">— 8.2 WSL curl 通但 OpenClaw 报 fetch failed</a></li>
+<li class="toc-h3"><a href="#83-hostdockerinternal-域名无法解析">— 8.3 host.docker.internal 域名无法解析</a></li>
+<li class="toc-h3"><a href="#84-网关启动失败gateway-mode-not-set">— 8.4 网关启动失败：gateway mode not set</a></li>
+<li class="toc-h3"><a href="#85-curl-ollama-chat-api-可以正常返回但是openclaw-agent-提示卡死连接超时">— 8.5 curl ollama chat api 可以正常返回，但是openclaw Agent 提示卡死连接超时</a></li>
+<li class="toc-h3"><a href="#86-会话文件锁冲突报错">— 8.6 会话文件锁冲突报错</a></li>
+<li class="toc-h3"><a href="#87-网关抛出认证错误">— 8.7 网关抛出认证错误</a></li>
+<li class="toc-h3"><a href="#88-curl-直接调用快但使用-openclaw-慢">— 8.8 curl 直接调用快，但使用 OpenClaw 慢</a></li>
+<li class="toc-h2"><a href="#9-性能优化建议">9. 性能优化建议</a></li>
+<li class="toc-h3"><a href="#91-选择合适模型">— 9.1 选择合适模型</a></li>
+<li class="toc-h3"><a href="#92-启用-gpu-加速nvidia-设备">— 9.2 启用 GPU 加速（NVIDIA 设备）</a></li>
+<li class="toc-h3"><a href="#93-调整-ollama-上下文窗口">— 9.3 调整 Ollama 上下文窗口</a></li>
+<li class="toc-h3"><a href="#94-openclaw-性能调优">— 9.4 OpenClaw 性能调优</a></li>
+<li class="toc-h2"><a href="#10-最终配置参考">10. 最终配置参考</a></li>
+<li class="toc-h3"><a href="#101-完整配置文件-openclawopenclawjson">— 10.1 完整配置文件 ~/.openclaw/openclaw.json</a></li>
+<li class="toc-h3"><a href="#102-快速测试命令">— 10.2 快速测试命令</a></li>
+<li class="toc-h3"><a href="#103-故障排查流程">— 10.3 故障排查流程</a></li>
+<li class="toc-h2"><a href="#附录常用命令速查">12. 附录：常用命令速查</a></li>
+</ol>
+</nav>
 </div>
 </main>
 <footer class="site-footer">

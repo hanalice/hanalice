@@ -656,6 +656,7 @@ class TestArticleToc(unittest.TestCase):
         self.assertIn('本文目录', html_out)
         self.assertIn('class="toc"', html_out)
         self.assertIn('has-toc', html_out)
+        self.assertIn('site-main--with-toc', html_out)
         self.assertIn('1. Alpha', html_out)
         self.assertIn('— Beta nested', html_out)
         self.assertIn('2. Gamma', html_out)
@@ -663,16 +664,52 @@ class TestArticleToc(unittest.TestCase):
         self.assertIn('href="#alpha"', html_out)
         self.assertIn('IntersectionObserver', html_out)
         self.assertIn('返回文章列表', html_out)
+        # Article before TOC in DOM reading order
+        article_i = html_out.find('<article>')
+        toc_i = html_out.find('class="toc"')
+        self.assertTrue(0 <= article_i < toc_i)
 
     def test_no_toc_when_no_headings(self):
         html_out = sync._render_post(self._post('Just a plain paragraph.\n'))
         self.assertNotIn('本文目录', html_out)
         self.assertNotIn('has-toc', html_out)
+        self.assertNotIn('site-main--with-toc', html_out)
+
+    def test_no_double_numbering_when_heading_already_numbered(self):
+        html_out = sync._render_post(self._post(
+            '## 1. 问题现象\n\nText.\n\n## 2. 根因分析\n\nMore.\n'
+        ))
+        self.assertIn('>1. 问题现象</a>', html_out)
+        self.assertIn('>2. 根因分析</a>', html_out)
+        self.assertNotIn('1. 1. 问题现象', html_out)
+        self.assertNotIn('2. 2. 根因分析', html_out)
+        # Chinese顿号 / paren forms also skip
+        html2 = sync._render_post(self._post('## 3、其他\n\nx\n\n## 4) Else\n\ny\n'))
+        self.assertIn('>3、其他</a>', html2)
+        self.assertIn('>4) Else</a>', html2)
+        self.assertNotIn('1. 3、其他', html2)
+        self.assertNotIn('2. 4) Else', html2)
+
+    def test_toc_display_label_h3_no_dup_emdash(self):
+        self.assertEqual(
+            sync._toc_display_label({'level': 3, 'text': '— already', 'number': None}),
+            '— already',
+        )
+        self.assertEqual(
+            sync._toc_display_label({'level': 3, 'text': 'plain', 'number': None}),
+            '— plain',
+        )
 
     def test_site_css_has_toc_sidebar(self):
         self.assertIn('.toc', sync._SITE_CSS)
         self.assertIn('position: sticky', sync._SITE_CSS)
         self.assertIn('post-layout.has-toc', sync._SITE_CSS)
+        self.assertIn('.site-main--with-toc', sync._SITE_CSS)
+        self.assertIn('minmax(0, 1fr) 240px', sync._SITE_CSS)
+        self.assertIn('min-width: 960px', sync._SITE_CSS)
+        self.assertNotIn(':has(.post-layout.has-toc)', sync._SITE_CSS)
+        # TOC links stay muted (not bright blue by default)
+        self.assertRegex(sync._SITE_CSS, r'\.toc-list a \{\s*color: var\(--muted\);')
 
 
 

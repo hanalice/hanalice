@@ -25,30 +25,8 @@
     </ul>
   </nav>
 </header>
-<main class="site-main">
+<main class="site-main site-main--with-toc">
 <div class="post-layout has-toc">
-<nav class="toc" aria-label="本文目录">
-<p class="toc-title">本文目录</p>
-<ol class="toc-list">
-<li class="toc-h2"><a href="#1-问题现象-problem-symptoms">1. 1. 问题现象 (Problem Symptoms)</a></li>
-<li class="toc-h3"><a href="#现象-a超时后二次-create双写">— 现象 A：超时后二次 create——双写</a></li>
-<li class="toc-h3"><a href="#现象-b错误不可分支一律盲重试">— 现象 B：错误不可分支——一律盲重试</a></li>
-<li class="toc-h3"><a href="#现象-cidempotenthint-true-被当成幂等实现">— 现象 C：idempotentHint: true 被当成幂等实现</a></li>
-<li class="toc-h2"><a href="#2-根因分析-root-cause-analysis">2. 2. 根因分析 (Root Cause Analysis)</a></li>
-<li class="toc-h2"><a href="#3-机制要点幂等键错误码与-mcp-annotations-mechanism">3. 3. 机制要点：幂等键、错误码、与 MCP annotations (Mechanism)</a></li>
-<li class="toc-h3"><a href="#31-idempotency-key谁生成谁存储何时算同一请求">— 3.1 Idempotency key：谁生成、谁存储、何时算「同一请求」</a></li>
-<li class="toc-h3"><a href="#32-错误码分支timeout-不是一种业务失败">— 3.2 错误码分支：timeout 不是一种业务失败</a></li>
-<li class="toc-h3"><a href="#33-mcp-toolannotationshint-实现">— 3.3 MCP ToolAnnotations：hint ≠ 实现</a></li>
-<li class="toc-h3"><a href="#34-与-durable-agent-execution-的边界一句划清">— 3.4 与 durable-agent-execution 的边界（一句划清）</a></li>
-<li class="toc-h2"><a href="#4-bad-goodcreate_order-超时对照-bad-good">4. 4. BAD / GOOD：create_order 超时对照 (BAD / GOOD)</a></li>
-<li class="toc-h3"><a href="#bad无键-糊错误-暗示可盲重试">— BAD：无键 + 糊错误 + 暗示可盲重试</a></li>
-<li class="toc-h3"><a href="#good必填键-可分支错误-诚实-annotation">— GOOD：必填键 + 可分支错误 + 诚实 annotation</a></li>
-<li class="toc-h3"><a href="#host-agent-侧重试伪代码">— Host / Agent 侧重试伪代码</a></li>
-<li class="toc-h2"><a href="#5-发版前清单-pre-ship-checklist">5. 5. 发版前清单 (Pre-Ship Checklist)</a></li>
-<li class="toc-h2"><a href="#6-小结-takeaways">6. 6. 小结 (Takeaways)</a></li>
-<li class="toc-h2"><a href="#参考-references">7. 参考 (References)</a></li>
-</ol>
-</nav>
 <article>
 <p class="back-top"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 <h1 class="page-title">Agent 写操作的幂等：超时之后凭什么敢重试</h1>
@@ -445,6 +423,28 @@ async function callCreateOrder(intent: { sku: string; qty: number }, taskId: str
 </div>
 <p class="back"><a href="/hanalice/">&larr; 返回文章列表</a></p>
 </article>
+<nav class="toc" aria-label="本文目录">
+<p class="toc-title">本文目录</p>
+<ol class="toc-list">
+<li class="toc-h2"><a href="#1-问题现象-problem-symptoms">1. 问题现象 (Problem Symptoms)</a></li>
+<li class="toc-h3"><a href="#现象-a超时后二次-create双写">— 现象 A：超时后二次 create——双写</a></li>
+<li class="toc-h3"><a href="#现象-b错误不可分支一律盲重试">— 现象 B：错误不可分支——一律盲重试</a></li>
+<li class="toc-h3"><a href="#现象-cidempotenthint-true-被当成幂等实现">— 现象 C：idempotentHint: true 被当成幂等实现</a></li>
+<li class="toc-h2"><a href="#2-根因分析-root-cause-analysis">2. 根因分析 (Root Cause Analysis)</a></li>
+<li class="toc-h2"><a href="#3-机制要点幂等键错误码与-mcp-annotations-mechanism">3. 机制要点：幂等键、错误码、与 MCP annotations (Mechanism)</a></li>
+<li class="toc-h3"><a href="#31-idempotency-key谁生成谁存储何时算同一请求">— 3.1 Idempotency key：谁生成、谁存储、何时算「同一请求」</a></li>
+<li class="toc-h3"><a href="#32-错误码分支timeout-不是一种业务失败">— 3.2 错误码分支：timeout 不是一种业务失败</a></li>
+<li class="toc-h3"><a href="#33-mcp-toolannotationshint-实现">— 3.3 MCP ToolAnnotations：hint ≠ 实现</a></li>
+<li class="toc-h3"><a href="#34-与-durable-agent-execution-的边界一句划清">— 3.4 与 durable-agent-execution 的边界（一句划清）</a></li>
+<li class="toc-h2"><a href="#4-bad-goodcreate_order-超时对照-bad-good">4. BAD / GOOD：create_order 超时对照 (BAD / GOOD)</a></li>
+<li class="toc-h3"><a href="#bad无键-糊错误-暗示可盲重试">— BAD：无键 + 糊错误 + 暗示可盲重试</a></li>
+<li class="toc-h3"><a href="#good必填键-可分支错误-诚实-annotation">— GOOD：必填键 + 可分支错误 + 诚实 annotation</a></li>
+<li class="toc-h3"><a href="#host-agent-侧重试伪代码">— Host / Agent 侧重试伪代码</a></li>
+<li class="toc-h2"><a href="#5-发版前清单-pre-ship-checklist">5. 发版前清单 (Pre-Ship Checklist)</a></li>
+<li class="toc-h2"><a href="#6-小结-takeaways">6. 小结 (Takeaways)</a></li>
+<li class="toc-h2"><a href="#参考-references">7. 参考 (References)</a></li>
+</ol>
+</nav>
 </div>
 </main>
 <footer class="site-footer">
