@@ -34,7 +34,7 @@
 - **已发文：** posts/agent_write_idempotency.md
 - **备注：** Reviewer approved; Alice 批准 push 2026-09-16。系列下一坑：long-horizon-decisive-error
 
-### [ready] 2026-09-15 | P1 | long-horizon-decisive-error
+### [published] 2026-09-17 | P1 | long-horizon-decisive-error
 - **工作标题：** 长程 Agent：第一个错 vs 决定性错误
 - **失败面：** 步数拉长后错误级联；日志上的「第一个异常」或「最后失败动作」≠ 决定性步；修错归因点救不了终局
 - **为何够深：** 需要轨迹归因协议（反事实可修复性 / 依赖分型 / commitment-point），而非再讲 plan-and-execute；对照 Who&When / FALAT / HORIZON History Error Accumulation
@@ -51,7 +51,8 @@
   - https://arxiv.org/abs/2606.08275 — Causal Agent Replay / Point-of-Commitment：最早高归因常是蝴蝶效应，真正承诺点是「仍可救援的最晚一步」
   - https://arxiv.org/abs/2608.06909 — Long-Horizon Agent Trajectory Attribution；primary vs attribution chain；long-range 更难
   - https://arxiv.org/abs/2609.06783 — AURA-Eval（次要）：安全关键决策点，非任务级联归因
-- **备注：** Gate PASS — 形态/机制/对照齐全；AURA-Eval 降为次要线索。写稿时优先用 HORIZON DB 表例 + Who&When 数字对照，勿写成 plan-and-execute 科普。
+- **已发文：** posts/long_horizon_decisive_error.md
+- **备注：** Reviewer approved; Alice 批准 push 2026-09-17。系列下一坑：durable-agent-execution
 
 ### [ready] 2026-09-15 | P1 | durable-agent-execution
 - **工作标题：** 长跑 Agent 挂了：Checkpoint 不等于 Durable Execution
@@ -108,3 +109,4 @@
 - 2026-09-15 Coordinator: published `trajectory-eval-false-green` → posts/trajectory_eval_false_green.md (Alice 批准 push).
 - 2026-09-15 Scout: kept `mcp-progressive-disclosure` as idea (gate FAIL — duplicates published Confusion+Bloat; wait for discovery-layer pit).
 - 2026-09-16 Coordinator: published `agent-write-idempotency` → posts/agent_write_idempotency.md (Alice 批准 push).
+- 2026-09-17 Coordinator: published `long-horizon-decisive-error` → posts/long_horizon_decisive_error.md (Alice 批准 push).
