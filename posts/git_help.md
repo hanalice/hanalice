@@ -2,6 +2,7 @@
 title: Git常用命令
 date: 2017-11-30
 tags: Git
+description: Git 常用命令速查：remote 与分支关联/删除、reset 三种模式、merge/rebase、force push，以及基于远程建分支等日常操作清单。
 ---
 
 ```

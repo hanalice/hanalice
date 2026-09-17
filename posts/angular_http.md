@@ -2,6 +2,7 @@
 title: AngularJS中$http服务的简单用法
 date: 2017-09-22
 tags: AngularJS, Http
+description: AngularJS 的 $http 封装 XMLHttpRequest：链式 success/error、method/url/params/data 配置，以及响应对象 data/status/headers/config 的取用方式。
 ---
 
 我们可以使用内置的$http服务直接同外部进行通信。$http服务只是简单的封装了浏览器原生的XMLHttpRequest对象。

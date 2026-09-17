@@ -2,6 +2,7 @@
 title: Git修改历史提交的作者信息
 date: 2024-09-19
 tags: Git
+description: 历史提交作者写错时：先改 user.name/email，再用 git filter-branch --env-filter 按旧邮箱批量改写 author/committer，最后用 git log 核验。
 ---
 
 1. config git username and email globally, otherwise omit --global to config in current repo.

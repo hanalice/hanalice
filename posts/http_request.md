@@ -2,6 +2,7 @@
 title: Http请求常用方法解释
 date: 2024-09-19
 tags: Http
+description: HTTP 方法对照：HEAD/GET/POST/PUT/PATCH/DELETE 各自语义与是否有副作用，以及参数落在 URL 还是 body 的取用方式速查。
 ---
 
 ## http 请求

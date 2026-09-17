@@ -2,6 +2,7 @@
 title: AngularJS的工具类集合
 date: 2017-08-15
 tags: AngularJS
+description: AngularJS 工具方法速查：用 angular.fromJson / toJson 在 JSON 字符串与对象（含数组）之间互转，并演示 pretty-print 输出。
 ---
 
 #### JSON obj 和 JSON string 相互转换

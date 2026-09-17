@@ -2,6 +2,7 @@
 title: Trajectory Eval：答对了为什么还是假绿
 date: 2026-09-15
 tags: Agent, Evaluation, Trajectory, Observability, Tool-Calling
+description: 终答对了仍可能假绿：乱调工具、空转重试、成本爆炸。用轨迹级指标（tool correctness、step budget、禁区副作用）补上只评 outcome 的盲区。
 ---
 
 ## 1. 问题现象 (Problem Symptoms)

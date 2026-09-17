@@ -2,6 +2,7 @@
 title: 构建崩溃与 Lockfile 版本漂移排查
 date: 2026-08-10
 tags: vite, rolldown, ci, build
+description: 本地 vite build 崩、CI 却绿：npm install 把 Vite 漂到 8.2.1，Rolldown 错误格式化二次崩溃。对齐用 npm ci，并把依赖钉死防漂移。
 ---
 
 ## 1. 问题现象 (Problem Symptoms)

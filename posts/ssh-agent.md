@@ -2,6 +2,7 @@
 title: 使用ssh-agent 管理多个ssh key
 date: 2017-08-07
 tags: SSH, Git, Agent
+description: 多 SSH key 场景：用 ssh-agent/ssh-add 加载私钥，在 ~/.ssh/config 按 Host 指定 IdentityFile，并验证 GitHub/GitLab 公钥认证是否通过。
 ---
 
 ```
