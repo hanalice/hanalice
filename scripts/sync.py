@@ -524,8 +524,8 @@ def _page_shell(
         '<html lang="zh-CN">',
         '<head>',
         '<meta charset="utf-8">',
-        '<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="google-site-verification" content="lzvulNOvVlgCNlqHLDxDMUCxU6OFoetuDHLuM8kzum0">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        '<meta name="google-site-verification" content="lzvulNOvVlgCNlqHLDxDMUCxU6OFoetuDHLuM8kzum0">',
         f'<title>{esc_title}</title>',
         f'<meta name="description" content="{esc_desc}">',
         f'<link rel="canonical" href="{esc_canon}">',
