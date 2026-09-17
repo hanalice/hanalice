@@ -2,6 +2,7 @@
 title: Windows 环境部署 OpenClaw + Ollama 完整指南
 date: 2026-04-15
 tags: OpenClaw, Ollama, WSL2
+description: Windows 11 + WSL2 部署 OpenClaw 并接本地 Ollama：打通 WSL 网络、OpenAI 兼容配置，以及端口占用、fetch failed、网关超时等踩坑排障。
 ---
 
 本文档总结了在 Windows 11 下通过 WSL2 部署 OpenClaw，并调用本地 Ollama 模型的全过程，包括所有遇到问题的解决方案。

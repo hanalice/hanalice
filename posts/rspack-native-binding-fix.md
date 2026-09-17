@@ -2,6 +2,7 @@
 title: pnpm 安装 rspack 原生 binding 缺失导致 build 失败
 date: 2026-08-08
 tags: pnpm, rspack, native-binding, WSL, optional-dependencies
+description: WSL 下 pnpm monorepo 构建报 Cannot find native binding：optional 的 rspack .node 未下载。在 pnpm-workspace.yaml 声明 supportedArchitectures 后重装即可。
 ---
 
 ### 问题描述

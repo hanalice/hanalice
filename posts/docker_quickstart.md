@@ -2,6 +2,7 @@
 title: Dockerfile 快速上手：构建并运行你的第一个容器
 date: 2017-07-18
 tags: Docker, DevOps, Container, Tutorial
+description: 用 Dockerfile 构建 Ubuntu+Apache 镜像：COPY 打包代码、ENV 调试元数据、USER 非 root 加固，以及 build/run 与密钥勿写入镜像的实践。
 ---
 
 Docker 是现代开发中不可或缺的工具。通过 `Dockerfile`，我们可以将环境配置“代码化”，确保在任何地方运行的结果都是一致的。

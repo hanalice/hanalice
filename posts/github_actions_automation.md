@@ -2,6 +2,7 @@
 title: 极简主义艺术：基于 GitHub Actions 的静态个人门户自动化体系
 date: 2017-07-01
 tags: DevOps, Git, Automation
+description: 用 README.template + Python + GitHub Actions 同步 Markdown 博客进 Profile：防图片压缩死循环、死链巡检，以及无 Git 膨胀的每日像素小人轮换。
 ---
 
 在当今各种重量级 Web 框架（如 React, Next.js）和各种付费云服务器盛行的时代，你是否想过回归极简主义？用纯粹的 Markdown 配合 GitHub 原生功能，零服务器成本，打造一个轻量、优雅、有灵魂的技术“个人名片”兼“博客门户”？
