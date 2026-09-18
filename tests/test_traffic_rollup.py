@@ -44,6 +44,11 @@ class TestGoatCounterParse(unittest.TestCase):
         self.assertEqual(totals['count'], 1234)
         self.assertEqual(totals['count_unique'], 56)
 
+    def test_403_hint_mentions_visitor_counter_setting(self):
+        hint = traffic_rollup.goatcounter_http_hint(403)
+        self.assertIn('Allow adding visitor counts', hint)
+        self.assertIn('visitor-counter', hint)
+
     def test_code_from_env(self):
         self.assertEqual(
             traffic_rollup.goatcounter_code(environ={'GOATCOUNTER_CODE': 'from-env'}),

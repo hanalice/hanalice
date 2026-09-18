@@ -149,6 +149,23 @@ def fetch_goatcounter_total(code):
     return _http_json(url, {'User-Agent': USER_AGENT, 'Accept': 'application/json'})
 
 
+def goatcounter_http_hint(status):
+    """Explain common GoatCounter counter-API failures for CI logs."""
+    if status == 403:
+        return (
+            'GoatCounter /counter/TOTAL.json returned 403. Enable '
+            '"Allow adding visitor counts on your website" in GoatCounter '
+            'site settings (off by default). See '
+            'https://www.goatcounter.com/help/visitor-counter'
+        )
+    if status == 404:
+        return (
+            'GoatCounter returned 404. Check GOATCOUNTER_CODE matches the '
+            'site subdomain (https://<code>.goatcounter.com).'
+        )
+    return f'GoatCounter HTTP {status}'
+
+
 def run(environ=None, traffic_path=None):
     env = os.environ if environ is None else environ
     store = load_traffic(traffic_path)
@@ -172,6 +189,7 @@ def run(environ=None, traffic_path=None):
         print('TRAFFIC_PAT unset; skip GitHub repo traffic', file=sys.stderr)
 
     code = goatcounter_code(environ=env)
+    warnings = []
     if code:
         try:
             totals = parse_goatcounter_total(fetch_goatcounter_total(code))
@@ -183,13 +201,15 @@ def run(environ=None, traffic_path=None):
                 f"count_unique={totals['count_unique']}"
             )
         except urllib.error.HTTPError as exc:
-            errors.append(f'GoatCounter HTTP {exc.code}: {exc.reason}')
+            warnings.append(goatcounter_http_hint(exc.code))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
-            errors.append(f'GoatCounter failed: {exc}')
+            warnings.append(f'GoatCounter failed: {exc}')
     else:
         print('GoatCounter code unset; skip site traffic', file=sys.stderr)
 
     save_traffic(store, traffic_path)
+    for line in warnings:
+        print(line, file=sys.stderr)
     if errors:
         for line in errors:
             print(line, file=sys.stderr)

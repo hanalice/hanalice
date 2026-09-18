@@ -43,7 +43,8 @@ One-time GitHub setup:
 1. PAT that can read this repository’s traffic ([Traffic API](https://docs.github.com/en/rest/metrics/traffic): classic `repo` scope, or fine-grained **Administration: Read**).
 2. Repo **Settings → Secrets and variables → Actions**: secret `TRAFFIC_PAT` (the PAT above).
 3. Same page → Variables: `GOATCOUNTER_CODE`.
-4. Push these workflow changes, then Actions → **Traffic rollup** → Run workflow, and **Deploy GitHub Pages** → Run workflow.
+4. In GoatCounter: site settings → enable **Allow adding visitor counts on your website** (defaults to off; `/counter/TOTAL.json` returns 403 until this is on). See [visitor counter](https://www.goatcounter.com/help/visitor-counter).
+5. Push these workflow changes, then Actions → **Traffic rollup** → Run workflow, and **Deploy GitHub Pages** → Run workflow.
 
 GoatCounter’s script ignores `localhost`, so `python3 -m http.server -d public` will not inflate production counts. Local `make sync` also skips the counter snippet unless `GOATCOUNTER_CODE` is in the environment.
 

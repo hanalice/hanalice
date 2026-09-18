@@ -93,7 +93,7 @@ graph TD
 ### 📊 3.4 访问量滚存流水线 (`traffic-rollup.yml`)
 - **触发时机**：每天 01:15 UTC，或手动触发。
 - **仓库流量**：用 secret `TRAFFIC_PAT` 调用 GitHub Traffic API（Insights 只保留 14 天）。按日期合并进 `data/traffic.json`，得到累计 **Repo views**（浏览次数；独立访客无法跨日加总，故只保留近 14 天 `uniques_14d`）。
-- **站点流量**：读取 Actions variable `GOATCOUNTER_CODE`，拉取 GoatCounter `counter/TOTAL.json`，写入 Site views。站点 code 不进仓库。
+- **站点流量**：读取 Actions variable `GOATCOUNTER_CODE`，拉取 GoatCounter `counter/TOTAL.json`，写入 Site views。站点 code 不进仓库。GoatCounter 需开启 **Allow adding visitor counts on your website**，否则该接口返回 403；此时仓库流量仍会写入，站点数字跳过。
 - **展示**：`sync.py` 把两个数字填进 README；GitHub Pages 页脚只显示 Site views，并注入 GoatCounter 计数脚本。默认 `GITHUB_TOKEN` **不能**读 Traffic，必须单独配置 PAT。
 
 ---
