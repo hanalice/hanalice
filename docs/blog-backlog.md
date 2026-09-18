@@ -79,52 +79,90 @@
 - **已发文：** posts/durable_agent_execution.md
 - **备注：** Reviewer approved; Alice 批准 push 2026-09-18。下一可写：等 Scout 升 ready（agent-memory-poisoning 等 idea）。
 
-### [idea] 2026-09-15 | P2 | mcp-progressive-disclosure
-- **工作标题：** 工具一多就选错：渐进发现 vs 一次灌进全部 MCP
-- **失败面：** context bloat → 错工具 → 重试再污染（当前仍等于范文 Confusion+Bloat）
-- **为何够深：** 尚未过门槛——需要 Host discovery 层失败面（search recall miss / taxonomy skip / 中途注入打断 prompt cache），而非再讲 dump-all vs lazy
-- **拟用案例 / 对照：** 待重框：retrieval@k vs selection accuracy；defer_loading / catalog→inspect→execute；非 V1–V4 复述
-- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（已含 V4 get_taxonomy + Tool Search 数字）
-- **参考线索：**
-  - https://www.anthropic.com/engineering/advanced-tool-use — Tool Search ~77K→8.7K；Opus 4 49%→74%
-  - https://www.anthropic.com/engineering/code-execution-with-mcp — filesystem disclosure 150K→2K
-  - https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool — defer_loading；≥10 tools / >10K def tokens
-  - https://aws.amazon.com/blogs/machine-learning/mcp-tool-design-practical-approaches-and-tradeoffs/ — V4 lazy get_taxonomy（范文已用）
-  - https://modelcontextprotocol.io/docs/2024-11-05/develop/clients/client-best-practices — Catalog→Inspect→Execute；mid-turn tools 变数组打断 cache
-- **备注：** Gate FAIL for ready — 失败面仍 = Confusion+Bloat / V4 已在范文。保持 idea。升 ready 条件：重框为 discovery-miss / runtime disclosure（recall miss、taxonomy skip、cache break），并有 retrieval@k 对照。不强行升。
-
-
-### [idea] 2026-09-18 | P0 | agent-memory-poisoning
-- **工作标题：** Agent 记得太久：Session Summarization 把间接注入写成跨会话「系统指令」
-- **失败面：** 当天对话看起来正常；隔天/新 session 才静默外泄或改行为 → 误判为「又一次 prompt injection / 模型对齐失败」；根因是 untrusted tool output 进入 summarization → 写入 LTM → 再注入 orchestration 的 system/memory 槽位（持久化，非当轮）
-- **为何够深：** 拆写路径：tool result → summarizer → memory store → next-session system context；对照 ephemeral PI vs persistent memory privilege；写门控 / provenance / 信任分级 / 是否允许 memory 进 system prompt
+### [ready] 2026-09-18 | P1 | mcp-progressive-disclosure
+- **工作标题：** Host 渐进发现：工具「搜不到」≠「没这个能力」
+- **失败面（Host discovery 层，非 Server schema）：** search recall miss → 模型断定「没这个能力」；Catalog→Inspect 跳过（未 inspect 就 invoke）；mid-turn 改 `tools` 数组打断 prompt cache；search/get/invoke 元工具混淆；`notifications/tools/list_changed` 后 Host 目录陈旧
+- **为何够深（非科普）：** 范文讲 **Server 工具设计**（Confusion+Bloat、V1–V4/`get_taxonomy`）。本文推进到 **Host 运行时发现层**：lazy/Tool Search 已上线后，失败从「塞太多」变成「检索漏召回 / 缓存失活 / 元工具路由错」。对照 retrieval@k vs selection accuracy，而非再画 dump-all vs lazy 入门图
 - **拟用案例 / 对照：**
-  1. Unit 42 Bedrock Agent PoC：恶意页 → scrape → summarization 把注入标成 “validation goal” → 新 session 编排计划含外泄步
-  2. MemoryTrap / ASI06：一次「装依赖」把 payload 送进 persistent memory/hooks；修法对照——从 system prompt 移除 user memories
-  3. 对照表：写时校验 vs 读时过滤 | episodic vs procedural | memory 进 user 上下文 vs system 槽 | 快照回滚
-- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（工具结果不可默认信任——本文推进到跨会话记忆）
+  1. **Recall miss（「没这个能力」）**：工具存在于 catalog，BM25/regex 未命中 → 模型放弃或瞎调邻居工具。Stacklok@2792 tools：Tool Search 选择准确率 ~34% / 召回 ~48% vs hybrid ~94%/~98%（同模型 Claude Sonnet 4.5）——根因是检索没把正确工具送进候选集
+  2. **Inspect skip**：Catalog→Inspect→Execute 中跳过 Inspect，拿短摘要直接 invoke → schema/参数错；对照「先 get 全定义再 call」
+  3. **Prompt-cache break**：会话中途把新工具塞进 `tools` 数组（重排/整表替换）→ 前缀缓存失效，省下的定义 token 被 cache miss 吃回；对照 `defer_loading` / 稳定 meta-`call_tool` / 只在 cache breakpoint 之后追加
+  4. **Meta-tool 混淆**：把 `search_tools` 当业务工具、或 `invoke` 时带错 name；三层职责必须互斥写进 Host 系统提示
+  5. **list_changed 陈旧 Host 缓存**：Server 已发 `notifications/tools/list_changed`，Host 只打日志不 refetch → 模型看不到新工具 / 仍持有已删工具 schema。Codex #33266（deferred 索引不重建）、#37417（会话内永不刷新；Desktop 长任务同症）；Zed 曾缺处理、PR #42453 补上（对照「通知≠刷新」）
+  6. **Token 数字（背景，非主线）：** Anthropic Tool Search ~72K→~8.7K（~85%）、Opus 4 MCP eval 49%→74%；code-execution filesystem disclosure 150K→2K（98.7%）——用来说明「省 token 已解决」之后，坑转移到 discovery 正确性
+- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md — **必须划界**：范文 = Server 面 Confusion+Bloat + AWS V4 `get_taxonomy`（作 prior art 一句带过，禁止复述 V1–V4 表）。本文 = Host 发现/缓存/元工具面。与 `mcp-auth-identity-not-intent`（授权受众）、`agent-memory-poisoning`（LTM）不重叠
+- **参考线索：**
+  - https://www.anthropic.com/engineering/advanced-tool-use — Tool Search / `defer_loading`；~72K→~8.7K；Opus 4 49%→74%；Opus 4.5 79.5%→88.1%；deferred 不破坏 prompt cache
+  - https://www.anthropic.com/engineering/code-execution-with-mcp — filesystem progressive disclosure 150K→2K（98.7%）
+  - https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool — `defer_loading`；发现后以 conversation 内 `tool_reference` 展开、前缀不变
+  - https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-use-with-prompt-caching — 改 tools 定义使整段 cache 失效；`defer_loading` 保 cache
+  - https://modelcontextprotocol.io/docs/2025-11-25/develop/clients/client-best-practices — Catalog→Inspect→Execute；`list_changed` 时重索引；mid-conversation 改 `tools` 数组废 cache（追加或稳定 `call_tool` meta）
+  - https://aws.amazon.com/blogs/machine-learning/mcp-tool-design-practical-approaches-and-tradeoffs/ — V4 lazy `get_taxonomy`（**范文已覆盖，仅作 prior art**）
+  - https://github.com/openai/codex/issues/33266 — `list_changed` 不 invalidate deferred tool cache / 不 refetch
+  - https://github.com/openai/codex/issues/37417 — 会话内 tool-list 变更永不生效（handler 只打日志）；Desktop 长任务旁证
+  - https://github.com/zed-industries/zed/pull/42453 — Host 补 `list_changed` → reload（历史缺口对照）
+  - https://stacklok.com/blog/stackloks-mcp-optimizer-vs-anthropics-tool-search-tool-a-head-to-head-comparison/ — **次要**：2792 tools 上 recall/selection 鸿沟（34% vs 94%）
+- **备注：** Gate PASS ready — 新失败面已锁定为 **Host discovery-layer**。写稿禁令：不要再写 dump-all vs lazy 入门、不要复述 Confusion+Bloat 主框架、不要重画 AWS V1–V4 表。开篇一句「范文已讲 Server/`get_taxonomy`」后立刻进入 Host 五坑。P1（有生产级 Host bug + 检索对照，但非安全 P0）。
+
+### [ready] 2026-09-18 | P0 | agent-memory-poisoning
+- **工作标题：** Agent 记得太久：Session Summarization 把间接注入写成跨会话「系统指令」
+- **失败面：** 当天对话看起来正常；隔天/新 session 才静默改行为或外泄 → 误判为「又一次 prompt injection / 模型对齐失败」；根因是 untrusted tool/document output 经 summarization/memory-writer 写入 LTM，再以高特权（system / orchestration memory 槽）跨会话复活
+- **为何够深：** 四段路径 (1) tool/doc 进会话 (2) summarizer / memory tool / 外部 manager 决定写什么 (3) LTM 无 provenance / 信任自抬 (4) 下一 session 拼进 system/orchestration；对照 ephemeral PI vs persistent memory privilege
+- **拟用案例 / 对照（禁 exploit 复现）：**
+  1. BAD auto-extract upsert（Unit 42）：summarizer 从含 tool result 的 transcript 抽 goals → upsert LTM → memory 进 orchestration system instructions
+  2. BAD memory=system prompt（MemoryTrap）；GOOD：user memories 移出 system prompt（Cisco / Claude Code 修复线）
+  3. BAD external manager 把观察写成用户事实（Sleeper）；GOOD：`source`/`trust`/`kind`；tool-derived→untrusted；procedural HITL/quarantine；高影响工具读路径 demote
+  4. 对照表：写时门控 vs 仅读时过滤 | episodic vs procedural | memory→user/context vs system 槽 | 快照回滚 | promote vs auto-extract
+- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（推进到跨会话记忆特权）；idempotency / durable / long-horizon / trajectory 不同层
 - **参考线索：**
   - https://unit42.paloaltonetworks.com/indirect-prompt-injection-poisons-ai-longterm-memory/
   - https://genai.owasp.org/2026/05/13/memory-is-a-feature-it-is-also-an-attack-surface/
+  - https://blogs.cisco.com/ai/identifying-and-remediating-a-persistent-memory-compromise-in-claude-code
   - https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ （ASI06）
-  - https://arxiv.org/html/2605.15338v1 — Sleeper Memory Poisoning
-- **备注：** Gate PASS for idea。升 ready 条件：补齐「看起来合理 BAD」（无信任 auto-extract upsert）vs gated write + provenance。禁 exploit 复现步骤。
+  - https://arxiv.org/abs/2605.15338 — Sleeper Memory Poisoning
+- **备注：** Gate PASS ready。写稿禁 exploit/payload 复现；只用架构 BAD/GOOD + checklist。下轮 Writer 可取。
 
-### [idea] 2026-09-18 | P1 | mcp-auth-identity-not-intent
-- **工作标题：** MCP 加了 OAuth 仍被「借权」：Identity ≠ Intent（Confused Deputy）
-- **失败面：** Token 有效、工具在 grant 内、审计「已授权」→ 仍被注入驱动去打不该打的查询/外泄；误判「再加一层 OAuth / 收紧 scope 就好」；根因是 deputy 位（代理持上游凭证 + 可注入模型发指令）+ 缺 audience 绑定 / token passthrough + OAuth 只答「谁可以调」不答「用户是否意图这次调用」
-- **为何够深：** 协议层：MCP 2025-06-18 MUST `resource`（RFC 8707）+ MUST NOT passthrough；对照 scope vs aud vs intent attestation / draft-then-commit；不是 OAuth 入门
+### [ready] 2026-09-18 | P1 | mcp-auth-identity-not-intent
+- **工作标题：** MCP Auth：Identity ≠ Audience（OAuth 绿了，token 没绑到这台 MCP）
+- **失败面：** Consent / OAuth 看起来成功 → token 缺 `resource`/`aud` 绑定或校验被跳过 → 跨 MCP / 跨应用 / 跨部署重放；误判「再加一层 OAuth / 收紧 scope」
+- **为何够深：** 主线锁 **RFC 8707 resource→aud 绑定 + 拒绝错受众 + MUST NOT passthrough**；OAuth 答的是「谁持有 token」，不是「token 是否发给**这台** MCP」。Intent / 参数策略只作短 coda；proxy consent-skip deputy 另文。非 OAuth 入门
 - **拟用案例 / 对照：**
-  1. BAD：共享 AS 发无 aud 的 token → 低权限 MCP 凭证可在高权限 server 重放；或 MCP server 原样转发 client token
-  2. BAD：analytics agent 持有 `snowflake_query` grant → 文档注入改查询内容 → ACL 仍放行（grant 管工具名不管参数语义）
-  3. 对照表：PKCE+per-client consent | aud 校验 | 禁止 passthrough | 高影响 draft-then-commit / HITL
-- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（合法但错——工具选择层）；本文是授权/代理层。与 `mcp-progressive-disclosure` 不重叠
+  1. **BAD#1 FastMCP OAuth Proxy** GHSA-5h2m-4q8j-pqpj / CVE-2025-69196：忽略 client `resource`，按 `base_url` 发 JWT aud → 同 AS 跨 MCP 重放；fix ≥2.14.2
+  2. **BAD#2 Google mcp-toolbox** CVE-2026-14541：`mcpEnabled` 无 audience/clientId → opaque Google token 跳过 aud 校验 → 任意有效 Google access token 可进；fix ≥1.5.0
+  3. **BAD#3 FrontMCP** GHSA-hvvp-67p3-j379：transparent JWT 校验 iss 恒真 + 不查 aud → 跨服务重用；fix ≥1.5.4
+  4. **旁证 Registry** CVE-2026-44428：共享 OIDC audience `mcp-registry` → 跨部署重放（低危，讲「audience 必须部署级」）
+  5. **对照 / GOOD：** 发 token 绑 canonical MCP URI | 每请求验 aud/resource | 拒错资源 | 禁止 client Bearer 原样转发上游（RFC 8693 换票）| passthrough 模式失败须闭（LiteLLM 脚注）| scopesRequired 全协议路径 | 高影响 draft-then-commit
+  6. **短 coda（非主线）：** mcp-toolbox CVE-2026-11719 — aud 修好 ≠ 工具授权修好（旧协议路径跳过 scopesRequired）
+- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（工具选择层）；与 `agent-memory-poisoning` 划界：调用时 token 绑定，不是 LTM。consent-skip deputy（FastMCP CVE-2026-27124）另选题
 - **参考线索：**
-  - https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization
-  - https://dreaming.press/posts/mcp-confused-deputy-problem.html
-  - https://workos.com/blog/mcp-resource-indicators
-  - https://www.permit.io/blog/oauth-on-mcp
-- **备注：** Gate PASS for idea。升 ready 条件：2～3 个生产 BAD（缺 aud、passthrough、scope-only）+ GOOD checklist；禁 OAuth 教程腔。
+  - https://github.com/PrefectHQ/fastmcp/security/advisories/GHSA-5h2m-4q8j-pqpj
+  - https://www.cve.org/CVERecord?id=CVE-2026-14541
+  - https://github.com/agentfront/frontmcp/security/advisories/GHSA-hvvp-67p3-j379
+  - https://github.com/modelcontextprotocol/registry/security/advisories/GHSA-95c3-6vvw-4mrq
+  - https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
+  - https://github.com/BerriAI/litellm/security/advisories/GHSA-7488-6r32-c95q — passthrough 脚注（auth bypass，非经典转发）
+  - https://osv.dev/vulnerability/GHSA-5gf6-gc35-xjpc — coda scopesRequired
+- **备注：** Gate PASS ready（主线 A：Identity≠Audience）。经典「client token 原样转发 GitHub」具名 CVE 仍缺——正文标 anti-pattern，勿捏造。slug 保留；标题勿再承诺满 Intent。
+
+### [ready] 2026-09-18 | P0 | multi-agent-closed-loop-handoff
+- **工作标题：** 专员互相转交都「成功」：Closed-Loop Escalation / 无终止谓词的 Handoff 环
+- **失败面：** 局部 handoff 成功 → 全局环；双边 dashboard 双绿；账单先于刹车（bill before brake）
+- **为何够深：** 把 multi-agent handoff 当 **routing fabric** 而非领域抽象——本地路由决策可合成全局环；「Verifier 满意 / 对方更合适」不是可判定终止谓词；observability ≠ enforcement。机制层：per-conversation handoff ledger、reject-and-explain、handoff budget（≠ token budget）、adversarial-seam eval（断言 **bounded termination**）。不是 MAS 入门、不是复述 MAST 14 模式清单
+- **拟用案例 / 对照：**
+  1. **Analyzer↔Verifier $47k（终止谓词缺失）**：Verifier「再分析一点」开环；11 天 / ~$47k；发现来自 billing，非 agent 内刹车（vectara case study）
+  2. **support↔billing closed-loop（所有权 seam）**：「charged」→billing、「access restored」→support；两边「转交成功」双绿（tianpan）
+  3. **对照表：** 局部 transfer-out 绿 vs 全局 progress/termination | handoff depth p99 | A↔B 对称热力格 | re-entry counter | structural-only vs hybrid cycle detect（F1 0.08→0.72）| token/cap vs handoff budget | 「Verifier satisfied」vs 可判定谓词
+  4. **次要：** Mastra `finishReason: other` 零输出非 terminal → 同请求重发至 maxSteps（#21897）
+- **相关已发文：** posts/trajectory_eval_false_green.md（终答假绿——评估面；本文是路由/转交指标假绿）；posts/durable_agent_execution.md；posts/long_horizon_decisive_error.md
+- **参考线索：**
+  - https://tianpan.co/blog/2026-05-02-closed-loop-escalation-bug-multi-agent-routing-cycles
+  - https://github.com/vectara/awesome-agent-failures/blob/main/docs/case-studies/langchain-a2a-47k-infinite-loop.md
+  - https://arxiv.org/abs/2503.13657 — MAST（一句锚定）
+  - https://arxiv.org/abs/2511.10650 — cycle detection；hybrid F1 0.72
+  - https://www.getmaxim.ai/articles/multi-agent-system-reliability-failure-patterns-root-causes-and-production-validation-strategies/
+  - https://towardsai.com/p/machine-learning/we-gave-the-ai-supervisor-structured-tools-so-it-couldnt-hallucinate-it-still-made-the-wrong-call — 次要；全文抓取受限勿捏造引文
+  - https://github.com/mastra-ai/mastra/issues/21897 — 次要
+- **备注：** Gate PASS ready。大纲锁死：routing protocol primitives + termination predicate；两种拓扑同属 closed-loop。禁 MAS primer。Writer 勿整段翻译 tianpan。下轮可与 memory 并列 ready（优先仍由 Coordinator kick）。
 
 ### [published] 2026-09-15 | P0 | mcp-valid-but-wrong
 - **工作标题：** MCP 工具设计：合法但错误的调用
@@ -146,3 +184,9 @@
 - 2026-09-17 Coordinator: published `long-horizon-decisive-error` → posts/long_horizon_decisive_error.md (Alice 批准 push).
 - 2026-09-18 Scout: add 2 ideas — agent-memory-poisoning (P0), mcp-auth-identity-not-intent (P1); skip handoff/eval-gaming/sandbox; no upgrade mcp-progressive-disclosure.
 - 2026-09-18 Coordinator: published `durable-agent-execution` → posts/durable_agent_execution.md (Alice 批准 push).
+- 2026-09-18 Scout: upgraded `agent-memory-poisoning` idea→ready (Unit 42 / MemoryTrap / Sleeper BAD-GOOD); keep mcp-auth as idea.
+- 2026-09-18 Scout: kept `mcp-auth-identity-not-intent` as idea (FastMCP GHSA-5h2m-4q8j-pqpj = BAD#1; still missing passthrough/intent production BADs).
+- 2026-09-18 Scout: add idea `multi-agent-closed-loop-handoff` (P1); skip 2nd filler; no upgrade mcp-progressive-disclosure.
+- 2026-09-18 Scout: upgraded `multi-agent-closed-loop-handoff` idea→ready P0 (closed-loop + termination predicate; tianpan/vectara/MAST/cycle-detect).
+- 2026-09-18 Scout: upgraded `mcp-auth-identity-not-intent` idea→ready P1 (narrowed Identity≠Audience; FastMCP+Toolbox+FrontMCP BADs).
+- 2026-09-18 Scout: upgraded `mcp-progressive-disclosure` idea→ready P1 (Host discovery reframed: recall miss / list_changed / cache; ≠ Server Confusion+Bloat).
