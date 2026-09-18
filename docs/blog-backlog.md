@@ -54,7 +54,7 @@
 - **已发文：** posts/long_horizon_decisive_error.md
 - **备注：** Reviewer approved; Alice 批准 push 2026-09-17。系列下一坑：durable-agent-execution
 
-### [ready] 2026-09-15 | P1 | durable-agent-execution
+### [published] 2026-09-18 | P1 | durable-agent-execution
 - **工作标题：** 长跑 Agent 挂了：Checkpoint 不等于 Durable Execution
 - **失败面：** 以为「有 checkpointer / 能 resume」就抗杀进程；HITL 审批在内存里等 → 宕机丢门控或恢复后重复副作用（双发邮件 / 双扣款 / 审计日志翻倍）
 - **为何够深：** 拆清三层边界——(1) 图状态快照（super-step / node boundary）vs (2) 事件历史回放（Workflow Event History / Activity 结果落盘）vs (3) 工具层幂等键；LangGraph 官方明示 resume 从**含 interrupt 的节点开头重跑**，`durability=exit|async` 与 InMemorySaver 的恢复窗口不同；Temporal Approval 用 Signal + 零算力等待，不占进程。不是「怎么写 Temporal Hello World」
@@ -76,7 +76,8 @@
   - https://jamjet.dev/blog/approvals-that-survive-kill-9/ — 审批状态必须事件化，否则 kill -9 丢门控
   - https://zylos.ai/research/2026-04-24-durable-execution-agent-runtimes/ — 会话记忆 ≠ durable execution；journal + 故意 crash 测试
   - https://learn.temporal.io/tutorials/ai/durable-ai-agent/ — Activity 结果进 Event History（机制引用，勿写成教程正文）
-- **备注：** Gate PASS。写稿禁令：Temporal 入门教程、框架选购清单。优先用 LangGraph 官方 interrupt 重入规则 + durability 模式作「看起来合理的 BAD」；Temporal/事件源作对照修复；结尾 checklist 指向「崩溃注入点」。与 idempotency 文交叉引用一句即可，勿合并成一篇。
+- **已发文：** posts/durable_agent_execution.md
+- **备注：** Reviewer approved; Alice 批准 push 2026-09-18。下一可写：等 Scout 升 ready（agent-memory-poisoning 等 idea）。
 
 ### [idea] 2026-09-15 | P2 | mcp-progressive-disclosure
 - **工作标题：** 工具一多就选错：渐进发现 vs 一次灌进全部 MCP
@@ -91,6 +92,39 @@
   - https://aws.amazon.com/blogs/machine-learning/mcp-tool-design-practical-approaches-and-tradeoffs/ — V4 lazy get_taxonomy（范文已用）
   - https://modelcontextprotocol.io/docs/2024-11-05/develop/clients/client-best-practices — Catalog→Inspect→Execute；mid-turn tools 变数组打断 cache
 - **备注：** Gate FAIL for ready — 失败面仍 = Confusion+Bloat / V4 已在范文。保持 idea。升 ready 条件：重框为 discovery-miss / runtime disclosure（recall miss、taxonomy skip、cache break），并有 retrieval@k 对照。不强行升。
+
+
+### [idea] 2026-09-18 | P0 | agent-memory-poisoning
+- **工作标题：** Agent 记得太久：Session Summarization 把间接注入写成跨会话「系统指令」
+- **失败面：** 当天对话看起来正常；隔天/新 session 才静默外泄或改行为 → 误判为「又一次 prompt injection / 模型对齐失败」；根因是 untrusted tool output 进入 summarization → 写入 LTM → 再注入 orchestration 的 system/memory 槽位（持久化，非当轮）
+- **为何够深：** 拆写路径：tool result → summarizer → memory store → next-session system context；对照 ephemeral PI vs persistent memory privilege；写门控 / provenance / 信任分级 / 是否允许 memory 进 system prompt
+- **拟用案例 / 对照：**
+  1. Unit 42 Bedrock Agent PoC：恶意页 → scrape → summarization 把注入标成 “validation goal” → 新 session 编排计划含外泄步
+  2. MemoryTrap / ASI06：一次「装依赖」把 payload 送进 persistent memory/hooks；修法对照——从 system prompt 移除 user memories
+  3. 对照表：写时校验 vs 读时过滤 | episodic vs procedural | memory 进 user 上下文 vs system 槽 | 快照回滚
+- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（工具结果不可默认信任——本文推进到跨会话记忆）
+- **参考线索：**
+  - https://unit42.paloaltonetworks.com/indirect-prompt-injection-poisons-ai-longterm-memory/
+  - https://genai.owasp.org/2026/05/13/memory-is-a-feature-it-is-also-an-attack-surface/
+  - https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ （ASI06）
+  - https://arxiv.org/html/2605.15338v1 — Sleeper Memory Poisoning
+- **备注：** Gate PASS for idea。升 ready 条件：补齐「看起来合理 BAD」（无信任 auto-extract upsert）vs gated write + provenance。禁 exploit 复现步骤。
+
+### [idea] 2026-09-18 | P1 | mcp-auth-identity-not-intent
+- **工作标题：** MCP 加了 OAuth 仍被「借权」：Identity ≠ Intent（Confused Deputy）
+- **失败面：** Token 有效、工具在 grant 内、审计「已授权」→ 仍被注入驱动去打不该打的查询/外泄；误判「再加一层 OAuth / 收紧 scope 就好」；根因是 deputy 位（代理持上游凭证 + 可注入模型发指令）+ 缺 audience 绑定 / token passthrough + OAuth 只答「谁可以调」不答「用户是否意图这次调用」
+- **为何够深：** 协议层：MCP 2025-06-18 MUST `resource`（RFC 8707）+ MUST NOT passthrough；对照 scope vs aud vs intent attestation / draft-then-commit；不是 OAuth 入门
+- **拟用案例 / 对照：**
+  1. BAD：共享 AS 发无 aud 的 token → 低权限 MCP 凭证可在高权限 server 重放；或 MCP server 原样转发 client token
+  2. BAD：analytics agent 持有 `snowflake_query` grant → 文档注入改查询内容 → ACL 仍放行（grant 管工具名不管参数语义）
+  3. 对照表：PKCE+per-client consent | aud 校验 | 禁止 passthrough | 高影响 draft-then-commit / HITL
+- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（合法但错——工具选择层）；本文是授权/代理层。与 `mcp-progressive-disclosure` 不重叠
+- **参考线索：**
+  - https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization
+  - https://dreaming.press/posts/mcp-confused-deputy-problem.html
+  - https://workos.com/blog/mcp-resource-indicators
+  - https://www.permit.io/blog/oauth-on-mcp
+- **备注：** Gate PASS for idea。升 ready 条件：2～3 个生产 BAD（缺 aud、passthrough、scope-only）+ GOOD checklist；禁 OAuth 教程腔。
 
 ### [published] 2026-09-15 | P0 | mcp-valid-but-wrong
 - **工作标题：** MCP 工具设计：合法但错误的调用
@@ -110,3 +144,5 @@
 - 2026-09-15 Scout: kept `mcp-progressive-disclosure` as idea (gate FAIL — duplicates published Confusion+Bloat; wait for discovery-layer pit).
 - 2026-09-16 Coordinator: published `agent-write-idempotency` → posts/agent_write_idempotency.md (Alice 批准 push).
 - 2026-09-17 Coordinator: published `long-horizon-decisive-error` → posts/long_horizon_decisive_error.md (Alice 批准 push).
+- 2026-09-18 Scout: add 2 ideas — agent-memory-poisoning (P0), mcp-auth-identity-not-intent (P1); skip handoff/eval-gaming/sandbox; no upgrade mcp-progressive-disclosure.
+- 2026-09-18 Coordinator: published `durable-agent-execution` → posts/durable_agent_execution.md (Alice 批准 push).
