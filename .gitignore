@@ -5,3 +5,8 @@ public/
 CLAUDE.md
 *.pyc
 .venv/
+
+# agent-hub 本机物化视图（由 init-project.sh 生成，不要提交）
+.agent-hub.lock
+.agent-hub-assets/
+AGENTS.md
