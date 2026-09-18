@@ -95,7 +95,7 @@ graph TD
 - **仓库流量**：用 secret `TRAFFIC_PAT` 调用 GitHub Traffic API（Insights 只保留 14 天）。按日期合并进 `data/traffic.json`，得到累计 **Repo views**（浏览次数；独立访客无法跨日加总，故只保留近 14 天 `uniques_14d`）。
 - **站点流量**：读取 Actions variable `GOATCOUNTER_CODE`，拉取 GoatCounter `counter/TOTAL.json`，写入 Site views。站点 code 不进仓库。GoatCounter 需开启 **Allow adding visitor counts on your website**，否则该接口返回 403；此时仓库流量仍会写入，站点数字跳过。
 - **展示**：`sync.py` 把两个数字填进 README；GitHub Pages 页脚只显示 Site views，并注入 GoatCounter 计数脚本。默认 `GITHUB_TOKEN` **不能**读 Traffic，必须单独配置 PAT。
-- **写入 `main`**：仓库 ruleset 要求改默认分支走 PR，`GITHUB_TOKEN` 直推会 GH013。流水线推到 `chore/traffic-rollup` 并开 PR，合并后数字才进主页。
+- **写入 `main`**：ruleset 禁止 Actions 直推默认分支。流水线推 `chore/traffic-rollup`；自动开 PR 需勾选 Actions 的 **Allow GitHub Actions to create and approve pull requests**。合并后数字才进主页。
 
 ---
 

@@ -57,13 +57,19 @@ jobs:
 
           # main 受 ruleset 保护：GITHUB_TOKEN 不能直推，改为更新 bot 分支并开/刷新 PR。
           git push --force origin HEAD:chore/traffic-rollup
+          echo "Pushed chore/traffic-rollup"
+          echo "Open PR: https://github.com/${GITHUB_REPOSITORY}/compare/main...chore/traffic-rollup?expand=1"
 
-          existing="$(gh pr list --base main --head chore/traffic-rollup --state open --json number --jq '.[0].number // empty')"
-          if [ -z "$existing" ]; then
-            gh pr create --base main --head chore/traffic-rollup \
-              --title "chore: roll up traffic stats" \
-              --body "Traffic rollup snapshot for README. main requires a PR (GH013); merge this to publish the counts."
-          else
+          # 仓库若未勾选 “Allow GitHub Actions to create and approve pull requests”，
+          # GraphQL createPullRequest 会失败；分支已在，不因此把 job 打红。
+          existing="$(gh pr list --base main --head chore/traffic-rollup --state open --json number --jq '.[0].number // empty' || true)"
+          if [ -n "${existing:-}" ]; then
             echo "Updated existing PR #${existing}"
+          elif gh pr create --base main --head chore/traffic-rollup \
+              --title "chore: roll up traffic stats" \
+              --body "Traffic rollup snapshot for README. Merge to publish counts on main."; then
+            echo "Opened PR"
+          else
+            echo "::warning::Could not create PR (enable Actions: Allow GitHub Actions to create and approve pull requests). Use the compare URL above."
           fi
           gh pr merge --squash --auto chore/traffic-rollup || true

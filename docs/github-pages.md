@@ -46,7 +46,7 @@ One-time GitHub setup:
 4. In GoatCounter: site settings → enable **Allow adding visitor counts on your website** (defaults to off; `/counter/TOTAL.json` returns 403 until this is on). See [visitor counter](https://www.goatcounter.com/help/visitor-counter).
 5. Push these workflow changes, then Actions → **Traffic rollup** → Run workflow, and **Deploy GitHub Pages** → Run workflow.
 
-`main` 开了 “Changes must be made through a pull request”。Actions 的 `GITHUB_TOKEN` **不能**直推 `main`（GH013）。Traffic rollup 会强制更新分支 `chore/traffic-rollup` 并开/刷新 PR。合并后 README 数字才会上默认分支。若希望合并自动化：Settings → General → **Allow auto-merge**。`blog-sync.yml` 直推 `main` 也会撞同一条规则。
+`main` 开了 “Changes must be made through a pull request”。Actions 的 `GITHUB_TOKEN` **不能**直推 `main`（GH013）。Traffic rollup 会强制更新 `chore/traffic-rollup`。自动开 PR 还需：Settings → Actions → General → Workflow permissions → **Allow GitHub Actions to create and approve pull requests**。未勾选时可手动打开 `https://github.com/hanalice/hanalice/compare/main...chore/traffic-rollup?expand=1`。合并后 README 数字才上默认分支。若希望合并自动化：Settings → General → **Allow auto-merge**。
 
 GoatCounter’s script ignores `localhost`, so `python3 -m http.server -d public` will not inflate production counts. Local `make sync` also skips the counter snippet unless `GOATCOUNTER_CODE` is in the environment.
 
