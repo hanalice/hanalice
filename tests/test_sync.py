@@ -613,6 +613,18 @@ class TestMermaidSupport(unittest.TestCase):
         self.assertNotIn('mermaid.min.js', without)
         self.assertNotIn('mermaid.initialize', without)
 
+    def test_render_post_includes_mermaid_zoom_lightbox(self):
+        html_out = sync._render_post(self._post(
+            "Intro\n\n```mermaid\nflowchart LR\nA-->B\n```\n"
+        ))
+        self.assertIn('bindMermaidZoom', html_out)
+        self.assertIn('openMermaidLightbox', html_out)
+        self.assertIn('mermaid-lightbox', html_out)
+
+    def test_site_css_has_mermaid_zoom_rules(self):
+        self.assertIn('.mermaid-lightbox', sync._MERMAID_ZOOM_CSS)
+        self.assertIn('cursor: zoom-in', sync._MERMAID_ZOOM_CSS)
+
 
 
 

@@ -646,6 +646,7 @@ def _write_site_css():
     path = os.path.join(css_dir, 'site.css')
     with open(path, 'w', encoding='utf-8') as f:
         f.write(_SITE_CSS)
+        f.write(_MERMAID_ZOOM_CSS)
     return path
 
 
@@ -697,6 +698,187 @@ def _filter_script():
 
 MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js'
 
+# 正文内图表适配栏宽；点击后全屏预览并支持滚轮缩放 / 拖拽平移。
+_MERMAID_ZOOM_CSS = """
+.prose pre:has(code.language-mermaid),
+.prose .mermaid-host {
+  cursor: zoom-in;
+}
+.prose code.language-mermaid svg,
+.prose .mermaid svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+.mermaid-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  flex-direction: column;
+}
+.mermaid-lightbox__toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem;
+}
+.mermaid-lightbox__close {
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f5f7;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.mermaid-lightbox__close:hover { background: rgba(255, 255, 255, 0.22); }
+.mermaid-lightbox__stage {
+  flex: 1 1 auto;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.mermaid-lightbox__stage:active { cursor: grabbing; }
+.mermaid-lightbox__stage svg {
+  display: block;
+  max-width: none;
+  height: auto;
+  transform-origin: 0 0;
+}
+"""
+
+_MERMAID_BOOT_SCRIPT = """<script>
+(function () {
+  if (typeof mermaid === "undefined") return;
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default" });
+  var ran = mermaid.run({ querySelector: "code.language-mermaid, .mermaid" });
+  if (ran && typeof ran.then === "function") {
+    ran.then(bindMermaidZoom).catch(bindMermaidZoom);
+  } else {
+    bindMermaidZoom();
+  }
+
+  function bindMermaidZoom() {
+    var nodes = document.querySelectorAll("code.language-mermaid, .mermaid");
+    nodes.forEach(function (el) {
+      var host = el.closest("pre") || el;
+      if (host.getAttribute("data-mermaid-zoom") === "1") return;
+      host.setAttribute("data-mermaid-zoom", "1");
+      host.classList.add("mermaid-host");
+      host.setAttribute("tabindex", "0");
+      host.setAttribute("role", "button");
+      host.setAttribute("aria-label", "放大查看图表");
+      host.addEventListener("click", function (ev) {
+        if (ev.target.closest("a")) return;
+        openMermaidLightbox(host);
+      });
+      host.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          openMermaidLightbox(host);
+        }
+      });
+    });
+  }
+
+  function openMermaidLightbox(host) {
+    var svg = host.querySelector("svg");
+    if (!svg) return;
+    var overlay = document.createElement("div");
+    overlay.className = "mermaid-lightbox";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "图表预览");
+    var toolbar = document.createElement("div");
+    toolbar.className = "mermaid-lightbox__toolbar";
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "mermaid-lightbox__close";
+    closeBtn.textContent = "关闭";
+    toolbar.appendChild(closeBtn);
+    var stage = document.createElement("div");
+    stage.className = "mermaid-lightbox__stage";
+    var clone = svg.cloneNode(true);
+    clone.removeAttribute("width");
+    clone.removeAttribute("height");
+    clone.style.maxWidth = "none";
+    stage.appendChild(clone);
+    overlay.appendChild(toolbar);
+    overlay.appendChild(stage);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+
+    var scale = 1, x = 0, y = 0, dragging = false, px = 0, py = 0;
+
+    function apply() {
+      clone.style.transform = "translate(" + x + "px," + y + "px) scale(" + scale + ")";
+    }
+
+    function fit() {
+      var sb = stage.getBoundingClientRect();
+      var box;
+      try { box = clone.getBBox(); } catch (err) {
+        box = { x: 0, y: 0, width: clone.clientWidth || 1, height: clone.clientHeight || 1 };
+      }
+      var pad = 64;
+      var next = Math.min((sb.width - pad) / (box.width || 1), (sb.height - pad) / (box.height || 1));
+      if (!isFinite(next) || next <= 0) next = 1;
+      scale = Math.min(next, 1.35);
+      x = (sb.width - box.width * scale) / 2 - box.x * scale;
+      y = (sb.height - box.height * scale) / 2 - box.y * scale;
+      apply();
+    }
+
+    function close() {
+      overlay.remove();
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", onKey);
+    }
+
+    function onKey(ev) {
+      if (ev.key === "Escape") close();
+    }
+
+    document.addEventListener("keydown", onKey);
+    closeBtn.addEventListener("click", close);
+    stage.addEventListener("wheel", function (ev) {
+      ev.preventDefault();
+      var rect = stage.getBoundingClientRect();
+      var mx = ev.clientX - rect.left;
+      var my = ev.clientY - rect.top;
+      var next = scale * (ev.deltaY > 0 ? 0.9 : 1.1);
+      next = Math.min(8, Math.max(0.15, next));
+      x = mx - (mx - x) * (next / scale);
+      y = my - (my - y) * (next / scale);
+      scale = next;
+      apply();
+    }, { passive: false });
+    stage.addEventListener("pointerdown", function (ev) {
+      dragging = true;
+      px = ev.clientX;
+      py = ev.clientY;
+      try { stage.setPointerCapture(ev.pointerId); } catch (err) {}
+    });
+    stage.addEventListener("pointermove", function (ev) {
+      if (!dragging) return;
+      x += ev.clientX - px;
+      y += ev.clientY - py;
+      px = ev.clientX;
+      py = ev.clientY;
+      apply();
+    });
+    stage.addEventListener("pointerup", function () { dragging = false; });
+    stage.addEventListener("pointercancel", function () { dragging = false; });
+    requestAnimationFrame(fit);
+  }
+})();
+</script>"""
+
 
 def _content_has_mermaid(body_md, content_html=''):
     """True if markdown/HTML contains a mermaid fence or language-mermaid block."""
@@ -711,21 +893,11 @@ def _content_has_mermaid(body_md, content_html=''):
 
 
 def _mermaid_assets():
-    """Return (extra_head, extra_body_end) snippets to load and init mermaid.js."""
+    """Return (extra_head, extra_body_end) snippets to load mermaid.js and zoom lightbox."""
     head = (
         f'<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>'
     )
-    body = (
-        f'<script src="{MERMAID_CDN}"></script>\n'
-        '<script>\n'
-        '(function () {\n'
-        '  if (typeof mermaid === "undefined") return;\n'
-        '  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;\n'
-        '  mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default" });\n'
-        '  mermaid.run({ querySelector: "code.language-mermaid, .mermaid" });\n'
-        '})();\n'
-        '</script>'
-    )
+    body = f'<script src="{MERMAID_CDN}"></script>\n' + _MERMAID_BOOT_SCRIPT
     return head, body
 
 
