@@ -1,4 +1,5 @@
 import html
+import json
 import os
 import random
 import re
@@ -15,6 +16,7 @@ README_OUTPUT = './README.md'
 MASCOTS_DIR = './assets/mascots'
 ASSETS_DIR = './assets'
 PUBLIC_DIR = './public'
+TRAFFIC_FILE = './data/traffic.json'
 SITE_BASE = 'https://hanalice.github.io/hanalice'
 BASE_PATH = '/hanalice'
 SITE_TITLE = 'hanalice'
@@ -275,6 +277,78 @@ def generate_tag_pages(all_tags, posts):
     print(f"Generated {len(all_tags)} tag pages in {TAGS_DIR}")
 
 
+def _load_json_object(path):
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _format_count(n):
+    return f'{int(n):,}'
+
+
+def _repo_views_total():
+    repo = _load_json_object(TRAFFIC_FILE).get('repo') or {}
+    return int(repo.get('total_count') or 0)
+
+
+def _site_views_total():
+    site = _load_json_object(TRAFFIC_FILE).get('site') or {}
+    unique = int(site.get('count_unique') or 0)
+    return unique if unique else int(site.get('count') or 0)
+
+
+def _goatcounter_code():
+    """GoatCounter site code comes from env GOATCOUNTER_CODE (Actions variable)."""
+    raw = (os.environ.get('GOATCOUNTER_CODE') or '').strip()
+    if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', raw):
+        return ''
+    return raw
+
+
+def _site_views_footer_html():
+    """Pages footer: site UV only (not GitHub repo traffic)."""
+    code = _goatcounter_code()
+    if not code:
+        return ''
+    baked = _format_count(_site_views_total())
+    stats = html.escape(f'https://{code}.goatcounter.com')
+    return (
+        f'  <p class="site-views">Site views: <span id="site-view-count">{html.escape(baked)}</span>'
+        f' &middot; <a href="{stats}" rel="noopener noreferrer" target="_blank">stats</a></p>'
+    )
+
+
+def _goatcounter_snippet():
+    """Count script + live TOTAL.json refresh. Localhost is ignored by GoatCounter."""
+    code = _goatcounter_code()
+    if not code:
+        return ''
+    origin = html.escape(code, quote=True)
+    count_url = html.escape(f'https://{code}.goatcounter.com/count', quote=True)
+    total_url = html.escape(f'https://{code}.goatcounter.com/counter/TOTAL.json', quote=True)
+    return (
+        f'<script data-goatcounter="{count_url}" async src="https://gc.zgo.at/count.js"></script>\n'
+        '<script>\n'
+        '(function () {\n'
+        f'  var url = "{total_url}";\n'
+        '  fetch(url).then(function (r) { return r.json(); }).then(function (d) {\n'
+        '    var el = document.getElementById("site-view-count");\n'
+        '    if (!el) return;\n'
+        '    var n = d.count_unique || d.count;\n'
+        '    if (n) el.textContent = n;\n'
+        '  }).catch(function () {});\n'
+        '})();\n'
+        '</script>\n'
+        f'<noscript><img src="https://{origin}.goatcounter.com/count?p=/hanalice/" alt=""></noscript>'
+    )
+
+
 def _inject_section(content, start_marker, end_marker, body):
     before, rest = content.split(start_marker, 1)
     _, after = rest.split(end_marker, 1)
@@ -318,6 +392,8 @@ def update_readme(posts, all_tags, daily_mascot=None):
 
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     readme_content = readme_content.replace('{{LAST_SYNC}}', now_str)
+    readme_content = readme_content.replace('{{REPO_VIEWS}}', _format_count(_repo_views_total()))
+    readme_content = readme_content.replace('{{SITE_VIEWS}}', _format_count(_site_views_total()))
 
     fallback_mascot = os.path.join(MASCOTS_DIR, 'default_mascot.png')
     readme_content = readme_content.replace('{{DAILY_MASCOT}}', daily_mascot or fallback_mascot)
@@ -328,6 +404,12 @@ def update_readme(posts, all_tags, daily_mascot=None):
 
 
 def rotate_mascot():
+    if os.environ.get('SYNC_SKIP_MASCOT') == '1':
+        if os.path.isdir(MASCOTS_DIR):
+            for name in os.listdir(MASCOTS_DIR):
+                if name.startswith('daily.'):
+                    return os.path.join(MASCOTS_DIR, name)
+        return None
     if not os.path.exists(MASCOTS_DIR):
         print("Mascots directory not found.")
         return None
@@ -544,8 +626,10 @@ def _page_shell(
         '</main>',
         '<footer class="site-footer">',
         f'  <p><a href="{home_href}">Home</a> &middot; <a href="{tags_href}">Tags</a> &middot; <a href="https://github.com/hanalice/hanalice">GitHub</a></p>',
+        _site_views_footer_html(),
         '</footer>',
         extra_body_end,
+        _goatcounter_snippet(),
         '</body>',
         '</html>',
         '',
@@ -553,7 +637,7 @@ def _page_shell(
     return '\n'.join(parts)
 
 
-_SITE_CSS = '/* Apple-inspired theme for GitHub Pages */\n:root {\n  --bg: #f5f5f7;\n  --fg: #1d1d1f;\n  --muted: #86868b;\n  --border: rgba(0, 0, 0, 0.08);\n  --link: #0066cc;\n  --link-hover: #0077ed;\n  --code-bg: #e8e8ed;\n  --chip-bg: #e8e8ed;\n  --chip-active: #1d1d1f;\n  --chip-active-fg: #f5f5f7;\n  --card: #ffffff;\n  --max: 980px;\n  --max-with-toc: 1180px;\n  --measure: 65ch;\n  --radius: 12px;\n  --radius-sm: 9800px;\n}\n* { box-sizing: border-box; }\nhtml { -webkit-text-size-adjust: 100%; }\nbody {\n  margin: 0;\n  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;\n  font-size: 17px;\n  line-height: 1.47059;\n  letter-spacing: -0.022em;\n  color: var(--fg);\n  background: var(--bg);\n  min-height: 100vh;\n}\na {\n  color: var(--link);\n  text-decoration: none;\n}\na:hover { color: var(--link-hover); text-decoration: underline; }\n.site-header {\n  position: sticky;\n  top: 0;\n  z-index: 50;\n  backdrop-filter: saturate(180%) blur(20px);\n  -webkit-backdrop-filter: saturate(180%) blur(20px);\n  background: rgba(245, 245, 247, 0.72);\n  border-bottom: 1px solid var(--border);\n}\n.site-nav {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 0.85rem 1.5rem;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 1rem;\n}\n.site-title {\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.03em;\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-title:hover { color: var(--fg); text-decoration: none; opacity: 0.8; }\n.nav-links {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  align-items: center;\n  gap: 1.25rem;\n  font-size: 0.9rem;\n}\n.nav-links a {\n  color: var(--muted);\n  text-decoration: none;\n  font-weight: 400;\n}\n.nav-links a:hover,\n.nav-links a.active {\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-main {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 2.5rem 1.5rem 3.5rem;\n}\n.site-footer {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 1.5rem 1.5rem 2.5rem;\n  border-top: 1px solid var(--border);\n  color: var(--muted);\n  font-size: 0.85rem;\n}\n.site-footer a { color: var(--muted); }\n.site-footer a:hover { color: var(--fg); }\n.page-title {\n  margin: 0 0 0.35rem;\n  font-size: clamp(2rem, 4.5vw, 2.75rem);\n  font-weight: 700;\n  letter-spacing: -0.045em;\n  line-height: 1.1;\n}\n.page-sub {\n  margin: 0 0 2rem;\n  color: var(--muted);\n  font-size: 1.05rem;\n}\n.tag-filters {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.5rem;\n  margin: 0 0 1.75rem;\n  padding: 0 0 1.5rem;\n  border-bottom: 1px solid var(--border);\n}\n.tag-chip {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0.35rem 0.85rem;\n  border-radius: var(--radius-sm);\n  border: none;\n  background: var(--chip-bg);\n  color: var(--fg);\n  font: inherit;\n  font-size: 0.8rem;\n  font-weight: 500;\n  letter-spacing: -0.01em;\n  cursor: pointer;\n  text-decoration: none;\n  transition: background 0.15s ease, color 0.15s ease;\n}\na.tag-chip:hover { text-decoration: none; color: var(--fg); background: #dcdce0; }\nbutton.tag-chip:hover { background: #dcdce0; }\n.tag-chip.active,\n.tag-chip[aria-pressed="true"] {\n  background: var(--chip-active);\n  color: var(--chip-active-fg);\n}\n.tag-chip .count {\n  color: inherit;\n  opacity: 0.65;\n  font-variant-numeric: tabular-nums;\n}\n.post-list {\n  list-style: none;\n  padding: 0;\n  margin: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.post-list > li {\n  background: var(--card);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 1.1rem 1.25rem;\n  transition: box-shadow 0.15s ease, border-color 0.15s ease;\n}\n.post-list > li:hover {\n  border-color: rgba(0, 0, 0, 0.12);\n  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);\n}\n.post-list > li.hidden { display: none; }\n.post-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: 0.35rem 0.85rem;\n}\n.post-card {\n  display: flex;\n  flex-direction: column;\n  gap: 0.35rem;\n}\n.post-meta-line {\n  margin: 0;\n}\n.post-list .date {\n  color: var(--muted);\n  font-size: 0.85rem;\n  font-variant-numeric: tabular-nums;\n}\n.post-list .post-title {\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.02em;\n  color: var(--fg);\n  text-decoration: none;\n  line-height: 1.3;\n}\n.post-list .post-title:hover { color: var(--link); text-decoration: none; }\n.post-desc {\n  margin: 0.1rem 0 0.2rem;\n  color: var(--muted);\n  font-size: 0.92rem;\n  line-height: 1.45;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 3;\n  line-clamp: 3;\n  overflow: hidden;\n}\n.post-list .post-tags {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n  width: 100%;\n  margin-top: 0.35rem;\n}\n.post-list .post-tags .tag-chip {\n  font-size: 0.72rem;\n  padding: 0.22rem 0.65rem;\n}\n.post-list .post-tags .tag-more {\n  font-size: 0.72rem;\n  color: var(--muted);\n  padding: 0.22rem 0.35rem;\n  text-decoration: none;\n  align-self: center;\n}\na.tag-more:hover { color: var(--fg); text-decoration: none; }\na.tag-chip-more { font-weight: 600; }\n.empty-filter {\n  display: none;\n  color: var(--muted);\n  padding: 1.5rem 0;\n}\n.empty-filter.visible { display: block; }\n.post-layout {\n  display: flex;\n  flex-direction: column;\n  gap: 1.25rem;\n}\n.post-layout > article {\n  max-width: var(--measure);\n  width: 100%;\n  min-width: 0;\n}\narticle {\n  max-width: var(--measure);\n}\narticle h1.page-title,\narticle > h1 {\n  margin-top: 0;\n  font-size: clamp(1.75rem, 3.5vw, 2.35rem);\n  font-weight: 700;\n  letter-spacing: -0.04em;\n  line-height: 1.15;\n}\n.back-top {\n  margin: 0 0 0.85rem;\n  font-size: 0.9rem;\n}\n.back-top a { color: var(--muted); text-decoration: none; }\n.back-top a:hover { color: var(--fg); text-decoration: none; }\n.post-meta {\n  color: var(--muted);\n  font-size: 0.95rem;\n  margin: 0.5rem 0 1.75rem;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 0.5rem 0.75rem;\n}\n.post-meta .reading-time::before {\n  content: "·";\n  margin-right: 0.5rem;\n  color: var(--muted);\n}\n.toc {\n  font-size: 0.88rem;\n  color: var(--muted);\n  background: var(--card);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 1rem 1.1rem;\n}\n.toc-title {\n  margin: 0 0 0.65rem;\n  font-size: 0.78rem;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n  text-transform: uppercase;\n  color: var(--muted);\n}\n.toc-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 0.35rem;\n}\n.toc-list a {\n  color: var(--muted);\n  text-decoration: none;\n  display: block;\n  line-height: 1.35;\n  border-left: 2px solid transparent;\n  padding-left: 0.55rem;\n  margin-left: -0.15rem;\n}\n.toc-list a:hover,\n.toc-list a.active {\n  color: var(--fg);\n  text-decoration: none;\n  border-left-color: var(--fg);\n}\n.toc-h3 a {\n  padding-left: 1.15rem;\n  font-size: 0.84rem;\n}\n.site-main--with-toc {\n  max-width: var(--max-with-toc);\n}\n.has-toc-layout .site-nav,\n.has-toc-layout .site-footer {\n  max-width: var(--max-with-toc);\n}\n@media (min-width: 960px) {\n  .post-layout.has-toc {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr) 240px;\n    gap: 2.25rem;\n    align-items: start;\n  }\n  .post-layout.has-toc > .toc {\n    position: sticky;\n    top: 5rem;\n    max-height: calc(100vh - 6rem);\n    overflow-y: auto;\n    align-self: start;\n  }\n}\n@media (max-width: 959px) {\n  .post-layout.has-toc > .toc {\n    order: -1;\n    max-height: 14rem;\n    overflow-y: auto;\n  }\n}\n.post-meta .tags,\n.tags {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n}\n.tags li { display: inline; }\n.prose {\n  max-width: var(--measure);\n  line-height: 1.65;\n}\n.prose h2, .prose h3 {\n  letter-spacing: -0.03em;\n  margin-top: 2rem;\n}\n.prose p { margin: 0.9rem 0; }\npre, code {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 0.88em;\n}\ncode {\n  background: var(--code-bg);\n  padding: 0.12em 0.4em;\n  border-radius: 6px;\n}\npre {\n  background: var(--code-bg);\n  padding: 1.1rem 1.2rem;\n  overflow-x: auto;\n  border-radius: 10px;\n  border: 1px solid var(--border);\n}\npre code { background: none; padding: 0; }\ntable { border-collapse: collapse; width: 100%; margin: 1rem 0; }\nth, td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; }\nimg { max-width: 100%; height: auto; border-radius: 8px; }\n.back { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }\n.tag-cloud {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.55rem;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n@media (prefers-color-scheme: dark) {\n  :root {\n    --bg: #000000;\n    --fg: #f5f5f7;\n    --muted: #a1a1a6;\n    --border: rgba(255, 255, 255, 0.12);\n    --link: #2997ff;\n    --link-hover: #6eb5ff;\n    --code-bg: #1d1d1f;\n    --chip-bg: #1d1d1f;\n    --chip-active: #f5f5f7;\n    --chip-active-fg: #1d1d1f;\n    --card: #1d1d1f;\n  }\n  .site-header {\n    background: rgba(0, 0, 0, 0.72);\n  }\n  a.tag-chip:hover,\n  button.tag-chip:hover { background: #2c2c2e; }\n  .post-list > li:hover {\n    border-color: rgba(255, 255, 255, 0.18);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);\n  }\n}\npre code.language-mermaid { display: block; }\n'
+_SITE_CSS = '/* Apple-inspired theme for GitHub Pages */\n:root {\n  --bg: #f5f5f7;\n  --fg: #1d1d1f;\n  --muted: #86868b;\n  --border: rgba(0, 0, 0, 0.08);\n  --link: #0066cc;\n  --link-hover: #0077ed;\n  --code-bg: #e8e8ed;\n  --chip-bg: #e8e8ed;\n  --chip-active: #1d1d1f;\n  --chip-active-fg: #f5f5f7;\n  --card: #ffffff;\n  --max: 980px;\n  --max-with-toc: 1180px;\n  --measure: 65ch;\n  --radius: 12px;\n  --radius-sm: 9800px;\n}\n* { box-sizing: border-box; }\nhtml { -webkit-text-size-adjust: 100%; }\nbody {\n  margin: 0;\n  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;\n  font-size: 17px;\n  line-height: 1.47059;\n  letter-spacing: -0.022em;\n  color: var(--fg);\n  background: var(--bg);\n  min-height: 100vh;\n}\na {\n  color: var(--link);\n  text-decoration: none;\n}\na:hover { color: var(--link-hover); text-decoration: underline; }\n.site-header {\n  position: sticky;\n  top: 0;\n  z-index: 50;\n  backdrop-filter: saturate(180%) blur(20px);\n  -webkit-backdrop-filter: saturate(180%) blur(20px);\n  background: rgba(245, 245, 247, 0.72);\n  border-bottom: 1px solid var(--border);\n}\n.site-nav {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 0.85rem 1.5rem;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 1rem;\n}\n.site-title {\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.03em;\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-title:hover { color: var(--fg); text-decoration: none; opacity: 0.8; }\n.nav-links {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  align-items: center;\n  gap: 1.25rem;\n  font-size: 0.9rem;\n}\n.nav-links a {\n  color: var(--muted);\n  text-decoration: none;\n  font-weight: 400;\n}\n.nav-links a:hover,\n.nav-links a.active {\n  color: var(--fg);\n  text-decoration: none;\n}\n.site-main {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 2.5rem 1.5rem 3.5rem;\n}\n.site-footer {\n  max-width: var(--max);\n  margin: 0 auto;\n  padding: 1.5rem 1.5rem 2.5rem;\n  border-top: 1px solid var(--border);\n  color: var(--muted);\n  font-size: 0.85rem;\n}\n.site-footer a { color: var(--muted); }\n.site-footer a:hover { color: var(--fg); }\n.site-footer .site-views { margin: 0.65rem 0 0; font-variant-numeric: tabular-nums; }\n.page-title {\n  margin: 0 0 0.35rem;\n  font-size: clamp(2rem, 4.5vw, 2.75rem);\n  font-weight: 700;\n  letter-spacing: -0.045em;\n  line-height: 1.1;\n}\n.page-sub {\n  margin: 0 0 2rem;\n  color: var(--muted);\n  font-size: 1.05rem;\n}\n.tag-filters {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.5rem;\n  margin: 0 0 1.75rem;\n  padding: 0 0 1.5rem;\n  border-bottom: 1px solid var(--border);\n}\n.tag-chip {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0.35rem 0.85rem;\n  border-radius: var(--radius-sm);\n  border: none;\n  background: var(--chip-bg);\n  color: var(--fg);\n  font: inherit;\n  font-size: 0.8rem;\n  font-weight: 500;\n  letter-spacing: -0.01em;\n  cursor: pointer;\n  text-decoration: none;\n  transition: background 0.15s ease, color 0.15s ease;\n}\na.tag-chip:hover { text-decoration: none; color: var(--fg); background: #dcdce0; }\nbutton.tag-chip:hover { background: #dcdce0; }\n.tag-chip.active,\n.tag-chip[aria-pressed="true"] {\n  background: var(--chip-active);\n  color: var(--chip-active-fg);\n}\n.tag-chip .count {\n  color: inherit;\n  opacity: 0.65;\n  font-variant-numeric: tabular-nums;\n}\n.post-list {\n  list-style: none;\n  padding: 0;\n  margin: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.post-list > li {\n  background: var(--card);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 1.1rem 1.25rem;\n  transition: box-shadow 0.15s ease, border-color 0.15s ease;\n}\n.post-list > li:hover {\n  border-color: rgba(0, 0, 0, 0.12);\n  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);\n}\n.post-list > li.hidden { display: none; }\n.post-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: 0.35rem 0.85rem;\n}\n.post-card {\n  display: flex;\n  flex-direction: column;\n  gap: 0.35rem;\n}\n.post-meta-line {\n  margin: 0;\n}\n.post-list .date {\n  color: var(--muted);\n  font-size: 0.85rem;\n  font-variant-numeric: tabular-nums;\n}\n.post-list .post-title {\n  font-weight: 600;\n  font-size: 1.05rem;\n  letter-spacing: -0.02em;\n  color: var(--fg);\n  text-decoration: none;\n  line-height: 1.3;\n}\n.post-list .post-title:hover { color: var(--link); text-decoration: none; }\n.post-desc {\n  margin: 0.1rem 0 0.2rem;\n  color: var(--muted);\n  font-size: 0.92rem;\n  line-height: 1.45;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 3;\n  line-clamp: 3;\n  overflow: hidden;\n}\n.post-list .post-tags {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n  width: 100%;\n  margin-top: 0.35rem;\n}\n.post-list .post-tags .tag-chip {\n  font-size: 0.72rem;\n  padding: 0.22rem 0.65rem;\n}\n.post-list .post-tags .tag-more {\n  font-size: 0.72rem;\n  color: var(--muted);\n  padding: 0.22rem 0.35rem;\n  text-decoration: none;\n  align-self: center;\n}\na.tag-more:hover { color: var(--fg); text-decoration: none; }\na.tag-chip-more { font-weight: 600; }\n.empty-filter {\n  display: none;\n  color: var(--muted);\n  padding: 1.5rem 0;\n}\n.empty-filter.visible { display: block; }\n.post-layout {\n  display: flex;\n  flex-direction: column;\n  gap: 1.25rem;\n}\n.post-layout > article {\n  max-width: var(--measure);\n  width: 100%;\n  min-width: 0;\n}\narticle {\n  max-width: var(--measure);\n}\narticle h1.page-title,\narticle > h1 {\n  margin-top: 0;\n  font-size: clamp(1.75rem, 3.5vw, 2.35rem);\n  font-weight: 700;\n  letter-spacing: -0.04em;\n  line-height: 1.15;\n}\n.back-top {\n  margin: 0 0 0.85rem;\n  font-size: 0.9rem;\n}\n.back-top a { color: var(--muted); text-decoration: none; }\n.back-top a:hover { color: var(--fg); text-decoration: none; }\n.post-meta {\n  color: var(--muted);\n  font-size: 0.95rem;\n  margin: 0.5rem 0 1.75rem;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 0.5rem 0.75rem;\n}\n.post-meta .reading-time::before {\n  content: "·";\n  margin-right: 0.5rem;\n  color: var(--muted);\n}\n.toc {\n  font-size: 0.88rem;\n  color: var(--muted);\n  background: var(--card);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 1rem 1.1rem;\n}\n.toc-title {\n  margin: 0 0 0.65rem;\n  font-size: 0.78rem;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n  text-transform: uppercase;\n  color: var(--muted);\n}\n.toc-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 0.35rem;\n}\n.toc-list a {\n  color: var(--muted);\n  text-decoration: none;\n  display: block;\n  line-height: 1.35;\n  border-left: 2px solid transparent;\n  padding-left: 0.55rem;\n  margin-left: -0.15rem;\n}\n.toc-list a:hover,\n.toc-list a.active {\n  color: var(--fg);\n  text-decoration: none;\n  border-left-color: var(--fg);\n}\n.toc-h3 a {\n  padding-left: 1.15rem;\n  font-size: 0.84rem;\n}\n.site-main--with-toc {\n  max-width: var(--max-with-toc);\n}\n.has-toc-layout .site-nav,\n.has-toc-layout .site-footer {\n  max-width: var(--max-with-toc);\n}\n@media (min-width: 960px) {\n  .post-layout.has-toc {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr) 240px;\n    gap: 2.25rem;\n    align-items: start;\n  }\n  .post-layout.has-toc > .toc {\n    position: sticky;\n    top: 5rem;\n    max-height: calc(100vh - 6rem);\n    overflow-y: auto;\n    align-self: start;\n  }\n}\n@media (max-width: 959px) {\n  .post-layout.has-toc > .toc {\n    order: -1;\n    max-height: 14rem;\n    overflow-y: auto;\n  }\n}\n.post-meta .tags,\n.tags {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.35rem;\n}\n.tags li { display: inline; }\n.prose {\n  max-width: var(--measure);\n  line-height: 1.65;\n}\n.prose h2, .prose h3 {\n  letter-spacing: -0.03em;\n  margin-top: 2rem;\n}\n.prose p { margin: 0.9rem 0; }\npre, code {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 0.88em;\n}\ncode {\n  background: var(--code-bg);\n  padding: 0.12em 0.4em;\n  border-radius: 6px;\n}\npre {\n  background: var(--code-bg);\n  padding: 1.1rem 1.2rem;\n  overflow-x: auto;\n  border-radius: 10px;\n  border: 1px solid var(--border);\n}\npre code { background: none; padding: 0; }\ntable { border-collapse: collapse; width: 100%; margin: 1rem 0; }\nth, td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; }\nimg { max-width: 100%; height: auto; border-radius: 8px; }\n.back { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }\n.tag-cloud {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.55rem;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n@media (prefers-color-scheme: dark) {\n  :root {\n    --bg: #000000;\n    --fg: #f5f5f7;\n    --muted: #a1a1a6;\n    --border: rgba(255, 255, 255, 0.12);\n    --link: #2997ff;\n    --link-hover: #6eb5ff;\n    --code-bg: #1d1d1f;\n    --chip-bg: #1d1d1f;\n    --chip-active: #f5f5f7;\n    --chip-active-fg: #1d1d1f;\n    --card: #1d1d1f;\n  }\n  .site-header {\n    background: rgba(0, 0, 0, 0.72);\n  }\n  a.tag-chip:hover,\n  button.tag-chip:hover { background: #2c2c2e; }\n  .post-list > li:hover {\n    border-color: rgba(255, 255, 255, 0.18);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);\n  }\n}\npre code.language-mermaid { display: block; }\n'
 
 
 def _write_site_css():

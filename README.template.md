@@ -5,6 +5,7 @@
 # Hi, I'm Hanalice
 **Apple-Style Minimalist Developer | Minimalist Geek**
 
+<sub>Repo views: {{REPO_VIEWS}} · Site views: {{SITE_VIEWS}}</sub>
 
 </div>
 

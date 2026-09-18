@@ -41,6 +41,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Build site
+        env:
+          GOATCOUNTER_CODE: ${{ vars.GOATCOUNTER_CODE }}
         run: python scripts/sync.py
 
       - name: Setup Pages

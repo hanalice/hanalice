@@ -45,8 +45,11 @@ graph TD
 ├── assets/                   # 静态资源目录
 │   └── mascots/              # 10 个像素小人图片池（用于每日轮换）
 ├── tags/                     # 自动生成的标签分类归档目录
+├── data/                     # 流量滚存快照（可提交；不含站点 code）
+│   └── traffic.json          # 仓库 / 站点累计数字
 ├── scripts/                  # 运维核心脚本
-│   └── sync.py               # 核心编译与同步 Python 脚本
+│   ├── sync.py               # 核心编译与同步 Python 脚本
+│   └── traffic_rollup.py     # GitHub Traffic + GoatCounter 滚存
 ├── docs/                     # 项目技术文档
 │   ├── ADR/                  # 架构决策记录
 │   ├── knowledge/            # 运维知识库与踩坑指南
@@ -60,7 +63,7 @@ graph TD
 
 ## 🤖 3. 自动化流水线 (CI/CD Workflows)
 
-项目的持续集成与自动部署完全托付给 GitHub Actions，主要包含三个核心流水线：
+项目的持续集成与自动部署完全托付给 GitHub Actions。除 Pages 部署外，主要流水线如下：
 
 ### 🔄 3.1 门户同步与每日轮换流水线 (`blog-sync.yml`)
 - **触发时机**：
@@ -86,6 +89,12 @@ graph TD
 ### 🔗 3.3 链接可用性巡检流水线 (`link-checker.yml`)
 - **触发时机**：每月 1 号定时执行，或手动触发。
 - **作用**：基于 `lycheeverse/lychee-action`，扫描仓库内所有 Markdown 文件中的外链。如果检测到 404 或死链，将自动在仓库中创建 GitHub Issue，提醒维护者更新链接，保持门户的健康度。
+
+### 📊 3.4 访问量滚存流水线 (`traffic-rollup.yml`)
+- **触发时机**：每天 01:15 UTC，或手动触发。
+- **仓库流量**：用 secret `TRAFFIC_PAT` 调用 GitHub Traffic API（Insights 只保留 14 天）。按日期合并进 `data/traffic.json`，得到累计 **Repo views**（浏览次数；独立访客无法跨日加总，故只保留近 14 天 `uniques_14d`）。
+- **站点流量**：读取 Actions variable `GOATCOUNTER_CODE`，拉取 GoatCounter `counter/TOTAL.json`，写入 Site views。站点 code 不进仓库。
+- **展示**：`sync.py` 把两个数字填进 README；GitHub Pages 页脚只显示 Site views，并注入 GoatCounter 计数脚本。默认 `GITHUB_TOKEN` **不能**读 Traffic，必须单独配置 PAT。
 
 ---
 

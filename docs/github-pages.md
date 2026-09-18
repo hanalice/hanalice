@@ -27,6 +27,26 @@ python3 -m http.server -d public 8000
 
 Note: on GitHub the site is served under base path `/hanalice`.
 
+## Visitor counts (repo + Pages)
+
+Two different metrics:
+
+| Surface | Metric | Source |
+|---|---|---|
+| GitHub README | Repo views + Site views | `data/traffic.json` (daily Action) |
+| Pages footer | Site views only | GoatCounter live `TOTAL.json` |
+
+**GoatCounter site code** is the subdomain prefix (`https://<code>.goatcounter.com`). Store it only as repository Actions variable `GOATCOUNTER_CODE` (Settings → Secrets and variables → Actions → Variables). Do not commit it. After setting the variable, re-run **Deploy GitHub Pages**.
+
+One-time GitHub setup:
+
+1. PAT that can read this repository’s traffic ([Traffic API](https://docs.github.com/en/rest/metrics/traffic): classic `repo` scope, or fine-grained **Administration: Read**).
+2. Repo **Settings → Secrets and variables → Actions**: secret `TRAFFIC_PAT` (the PAT above).
+3. Same page → Variables: `GOATCOUNTER_CODE`.
+4. Push these workflow changes, then Actions → **Traffic rollup** → Run workflow, and **Deploy GitHub Pages** → Run workflow.
+
+GoatCounter’s script ignores `localhost`, so `python3 -m http.server -d public` will not inflate production counts. Local `make sync` also skips the counter snippet unless `GOATCOUNTER_CODE` is in the environment.
+
 ## Follow-up workflow example
 
 If you need a reference copy of the sync Action: `docs/blog-sync.yml.example`.

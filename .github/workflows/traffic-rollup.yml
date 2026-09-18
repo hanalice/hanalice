@@ -1,0 +1,49 @@
+name: Traffic rollup
+
+on:
+  schedule:
+    - cron: '15 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: traffic-rollup
+  cancel-in-progress: false
+
+jobs:
+  rollup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Roll up GitHub + GoatCounter stats
+        env:
+          TRAFFIC_PAT: ${{ secrets.TRAFFIC_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GOATCOUNTER_CODE: ${{ vars.GOATCOUNTER_CODE }}
+        run: python scripts/traffic_rollup.py
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Refresh README numbers
+        env:
+          SYNC_SKIP_MASCOT: '1'
+          GOATCOUNTER_CODE: ${{ vars.GOATCOUNTER_CODE }}
+        run: python scripts/sync.py
+
+      - name: Commit traffic snapshot
+        run: |
+          git config user.name "hanalice"
+          git config user.email "hanalice@users.noreply.github.com"
+          git add data/traffic.json README.md
+          git commit -m "chore: roll up traffic stats" || exit 0
+          git push

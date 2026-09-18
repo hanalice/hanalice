@@ -242,6 +242,34 @@ class TestUpdateReadme(unittest.TestCase):
                 body = f.read()
             self.assertNotIn('{{LAST_SYNC}}', body)
 
+    def test_view_placeholders_replaced(self):
+        with tempfile.TemporaryDirectory() as d:
+            tpl = os.path.join(d, 'README.template.md')
+            out = os.path.join(d, 'README.md')
+            traffic = os.path.join(d, 'traffic.json')
+            _write(
+                tpl,
+                "{{DAILY_MASCOT}}\n"
+                "Repo views: {{REPO_VIEWS}} · Site views: {{SITE_VIEWS}}\n"
+                "<!-- BLOG-POST-LIST:START -->\n<!-- BLOG-POST-LIST:END -->\n"
+                "<!-- TAG-CLOUD:START -->\n<!-- TAG-CLOUD:END -->\n"
+                "{{LAST_SYNC}}",
+            )
+            _write(traffic, '{"repo":{"total_count":1234},"site":{"count_unique":56}}')
+            orig_traffic = sync.TRAFFIC_FILE
+            sync.README_TEMPLATE = tpl
+            sync.README_OUTPUT = out
+            sync.TRAFFIC_FILE = traffic
+            try:
+                sync.update_readme([], {})
+            finally:
+                sync.TRAFFIC_FILE = orig_traffic
+            with open(out) as f:
+                body = f.read()
+            self.assertIn('Repo views: 1,234', body)
+            self.assertIn('Site views: 56', body)
+            self.assertNotIn('{{REPO_VIEWS}}', body)
+            self.assertNotIn('{{SITE_VIEWS}}', body)
 
 
 # ── GitHub Pages static export ───────────────────────────────────────────────
@@ -701,6 +729,46 @@ class TestArticleToc(unittest.TestCase):
             sync._toc_display_label({'level': 3, 'text': 'plain', 'number': None}),
             '— plain',
         )
+
+    def test_page_shell_omits_analytics_without_code(self):
+        orig_env = os.environ.get('GOATCOUNTER_CODE')
+        os.environ.pop('GOATCOUNTER_CODE', None)
+        try:
+            html_out = sync._page_shell(
+                title='t',
+                description='d',
+                canonical='https://example.test/p',
+                body_html='<p>x</p>',
+            )
+        finally:
+            if orig_env is None:
+                os.environ.pop('GOATCOUNTER_CODE', None)
+            else:
+                os.environ['GOATCOUNTER_CODE'] = orig_env
+        self.assertNotIn('goatcounter.com', html_out)
+        self.assertNotIn('site-view-count', html_out)
+        self.assertNotIn('Repo views', html_out)
+
+    def test_page_shell_injects_goatcounter_and_site_footer(self):
+        orig_env = os.environ.get('GOATCOUNTER_CODE')
+        os.environ['GOATCOUNTER_CODE'] = 'hanalice-test'
+        try:
+            html_out = sync._page_shell(
+                title='t',
+                description='d',
+                canonical='https://example.test/p',
+                body_html='<p>x</p>',
+            )
+        finally:
+            if orig_env is None:
+                os.environ.pop('GOATCOUNTER_CODE', None)
+            else:
+                os.environ['GOATCOUNTER_CODE'] = orig_env
+        self.assertIn('https://hanalice-test.goatcounter.com/count', html_out)
+        self.assertIn('id="site-view-count"', html_out)
+        self.assertIn('Site views:', html_out)
+        self.assertNotIn('Repo views', html_out)
+        self.assertIn('gc.zgo.at/count.js', html_out)
 
     def test_page_shell_aligns_nav_with_wide_toc_layout(self):
         html_out = sync._page_shell(
