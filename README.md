@@ -5,7 +5,7 @@
 # Hi, I'm Hanalice
 **Apple-Style Minimalist Developer | Minimalist Geek**
 
-<sub>Repo views: 0 · Site views: 0</sub>
+<sub>Repo views: 145 · Site views: 2</sub>
 
 </div>
 
@@ -22,8 +22,8 @@
 - [2026-08-10] [构建崩溃与 Lockfile 版本漂移排查](./posts/vite_rolldown_build_troubleshooting.md)
 - [2026-08-08] [pnpm 安装 rspack 原生 binding 缺失导致 build 失败](./posts/rspack-native-binding-fix.md)
 - [2026-04-15] [Windows 环境部署 OpenClaw + Ollama 完整指南](./posts/openclaw-deploy-windows.md)
-- [2024-09-19] [Http请求常用方法解释](./posts/http_request.md)
 - [2024-09-19] [Git修改历史提交的作者信息](./posts/git_change_history_commit_authors.md)
+- [2024-09-19] [Http请求常用方法解释](./posts/http_request.md)
 <!-- BLOG-POST-LIST:END -->
 
 ---
@@ -38,4 +38,4 @@
   <a href="./posts">All Posts →</a>
 </p>
 
-<!-- STATUS: HEALTHY, LAST_SYNC: 2026-09-18 16:28:04 -->
+<!-- STATUS: HEALTHY, LAST_SYNC: 2026-09-18 09:51:43 -->
