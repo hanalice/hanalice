@@ -698,24 +698,23 @@ def _filter_script():
 
 MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js'
 
-# 正文内图表适配栏宽；点击后全屏预览并支持滚轮缩放 / 拖拽平移。
+# 正文内横向滚动；预览层对 wrapper 做 transform，避免 SVG height:auto 拆散 foreignObject。
 _MERMAID_ZOOM_CSS = """
 .prose pre:has(code.language-mermaid),
 .prose .mermaid-host {
   cursor: zoom-in;
+  overflow-x: auto;
 }
 .prose code.language-mermaid svg,
 .prose .mermaid svg {
-  max-width: 100%;
-  height: auto;
   display: block;
-  margin: 0 auto;
+  max-width: none;
 }
 .mermaid-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 200;
-  background: rgba(0, 0, 0, 0.78);
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.92);
   display: flex;
   flex-direction: column;
 }
@@ -738,16 +737,20 @@ _MERMAID_ZOOM_CSS = """
 .mermaid-lightbox__close:hover { background: rgba(255, 255, 255, 0.22); }
 .mermaid-lightbox__stage {
   flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
   cursor: grab;
   touch-action: none;
 }
 .mermaid-lightbox__stage:active { cursor: grabbing; }
-.mermaid-lightbox__stage svg {
-  display: block;
-  max-width: none;
-  height: auto;
+.mermaid-lightbox__zoom {
+  display: inline-block;
   transform-origin: 0 0;
+  will-change: transform;
+}
+.mermaid-lightbox__zoom svg {
+  display: block;
+  max-width: none !important;
 }
 """
 
@@ -755,7 +758,14 @@ _MERMAID_BOOT_SCRIPT = """<script>
 (function () {
   if (typeof mermaid === "undefined") return;
   var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default" });
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: dark ? "dark" : "default",
+    flowchart: { useMaxWidth: false },
+    sequence: { useMaxWidth: false },
+    class: { useMaxWidth: false },
+    state: { useMaxWidth: false }
+  });
   var ran = mermaid.run({ querySelector: "code.language-mermaid, .mermaid" });
   if (ran && typeof ran.then === "function") {
     ran.then(bindMermaidZoom).catch(bindMermaidZoom);
@@ -786,9 +796,34 @@ _MERMAID_BOOT_SCRIPT = """<script>
     });
   }
 
+  function pinSvgPixelSize(svg) {
+    svg.style.maxWidth = "none";
+    svg.style.width = "";
+    svg.style.height = "";
+    var vb = (svg.getAttribute("viewBox") || "").trim().split(/[\\s,]+/).map(Number);
+    var w = 0, h = 0;
+    if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+      w = vb[2];
+      h = vb[3];
+    } else {
+      w = parseFloat(svg.getAttribute("width")) || svg.clientWidth || 1;
+      h = parseFloat(svg.getAttribute("height")) || svg.clientHeight || 1;
+    }
+    svg.setAttribute("width", String(w));
+    svg.setAttribute("height", String(h));
+    svg.style.width = w + "px";
+    svg.style.height = h + "px";
+    return { w: w, h: h };
+  }
+
   function openMermaidLightbox(host) {
     var svg = host.querySelector("svg");
     if (!svg) return;
+    var home = svg.parentNode;
+    var next = svg.nextSibling;
+    var prevWidth = svg.getAttribute("width");
+    var prevHeight = svg.getAttribute("height");
+    var prevStyle = svg.getAttribute("style");
     var overlay = document.createElement("div");
     overlay.className = "mermaid-lightbox";
     overlay.setAttribute("role", "dialog");
@@ -803,11 +838,11 @@ _MERMAID_BOOT_SCRIPT = """<script>
     toolbar.appendChild(closeBtn);
     var stage = document.createElement("div");
     stage.className = "mermaid-lightbox__stage";
-    var clone = svg.cloneNode(true);
-    clone.removeAttribute("width");
-    clone.removeAttribute("height");
-    clone.style.maxWidth = "none";
-    stage.appendChild(clone);
+    pinSvgPixelSize(svg);
+    var layer = document.createElement("div");
+    layer.className = "mermaid-lightbox__zoom";
+    layer.appendChild(svg);
+    stage.appendChild(layer);
     overlay.appendChild(toolbar);
     overlay.appendChild(stage);
     document.body.appendChild(overlay);
@@ -816,25 +851,28 @@ _MERMAID_BOOT_SCRIPT = """<script>
     var scale = 1, x = 0, y = 0, dragging = false, px = 0, py = 0;
 
     function apply() {
-      clone.style.transform = "translate(" + x + "px," + y + "px) scale(" + scale + ")";
+      layer.style.transform = "translate(" + x + "px," + y + "px) scale(" + scale + ")";
     }
 
     function fit() {
       var sb = stage.getBoundingClientRect();
-      var box;
-      try { box = clone.getBBox(); } catch (err) {
-        box = { x: 0, y: 0, width: clone.clientWidth || 1, height: clone.clientHeight || 1 };
-      }
-      var pad = 64;
-      var next = Math.min((sb.width - pad) / (box.width || 1), (sb.height - pad) / (box.height || 1));
-      if (!isFinite(next) || next <= 0) next = 1;
-      scale = Math.min(next, 1.35);
-      x = (sb.width - box.width * scale) / 2 - box.x * scale;
-      y = (sb.height - box.height * scale) / 2 - box.y * scale;
+      var size = pinSvgPixelSize(svg);
+      var pad = 48;
+      var nextScale = Math.min((sb.width - pad) / size.w, (sb.height - pad) / size.h);
+      if (!isFinite(nextScale) || nextScale <= 0) nextScale = 1;
+      scale = Math.min(nextScale, 1.5);
+      x = (sb.width - size.w * scale) / 2;
+      y = (sb.height - size.h * scale) / 2;
       apply();
     }
 
     function close() {
+      layer.style.transform = "";
+      if (prevWidth == null) svg.removeAttribute("width"); else svg.setAttribute("width", prevWidth);
+      if (prevHeight == null) svg.removeAttribute("height"); else svg.setAttribute("height", prevHeight);
+      if (prevStyle == null) svg.removeAttribute("style"); else svg.setAttribute("style", prevStyle);
+      if (next && next.parentNode === home) home.insertBefore(svg, next);
+      else home.appendChild(svg);
       overlay.remove();
       document.body.style.overflow = "";
       document.removeEventListener("keydown", onKey);
