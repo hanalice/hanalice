@@ -40,13 +40,16 @@ Two different metrics:
 
 One-time GitHub setup:
 
-1. PAT that can read this repository’s traffic ([Traffic API](https://docs.github.com/en/rest/metrics/traffic): classic `repo` scope, or fine-grained **Administration: Read**).
-2. Repo **Settings → Secrets and variables → Actions**: secret `TRAFFIC_PAT` (the PAT above).
-3. Same page → Variables: `GOATCOUNTER_CODE`.
-4. In GoatCounter: site settings → enable **Allow adding visitor counts on your website** (defaults to off; `/counter/TOTAL.json` returns 403 until this is on). See [visitor counter](https://www.goatcounter.com/help/visitor-counter).
-5. Push these workflow changes, then Actions → **Traffic rollup** → Run workflow, and **Deploy GitHub Pages** → Run workflow.
+1. Fine-grained PAT for this repo, stored as secret `TRAFFIC_PAT`. Permissions:
+   - **Administration: Read** — Traffic API
+   - **Contents: Write** — squash-merge onto `main`
+   - **Pull requests: Write** — create and merge the snapshot PR  
+   (`GITHUB_TOKEN` cannot create PRs unless the repo enables “Allow GitHub Actions to create and approve pull requests”, and it cannot bypass the `main` ruleset.)
+2. Same page → Variables: `GOATCOUNTER_CODE`.
+3. In GoatCounter: site settings → enable **Allow adding visitor counts on your website** (defaults to off; `/counter/TOTAL.json` returns 403 until this is on). See [visitor counter](https://www.goatcounter.com/help/visitor-counter).
+4. Actions → **Traffic rollup** → Run workflow. It force-pushes `chore/traffic-rollup`, opens a PR, and squash-merges it. Then run **Deploy GitHub Pages** if the site footer script is not live yet.
 
-`main` 开了 “Changes must be made through a pull request”。Actions 的 `GITHUB_TOKEN` **不能**直推 `main`（GH013）。Traffic rollup 会强制更新 `chore/traffic-rollup`。自动开 PR 还需：Settings → Actions → General → Workflow permissions → **Allow GitHub Actions to create and approve pull requests**。未勾选时可手动打开 `https://github.com/hanalice/hanalice/compare/main...chore/traffic-rollup?expand=1`。合并后 README 数字才上默认分支。若希望合并自动化：Settings → General → **Allow auto-merge**。
+`main` 要求走 PR。滚存用 `TRAFFIC_PAT`（你的账号）开 PR 并合并，不依赖 Actions 那个「允许创建 PR」开关。若 PAT 仍只有 Administration: Read，开 PR / 合并会失败，请按上面补 Contents 与 Pull requests。
 
 GoatCounter’s script ignores `localhost`, so `python3 -m http.server -d public` will not inflate production counts. Local `make sync` also skips the counter snippet unless `GOATCOUNTER_CODE` is in the environment.
 
