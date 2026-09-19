@@ -79,7 +79,7 @@ graph TD
      - 生成最新的博文列表（按日期倒序，首页最多展示最新 10 篇）。
      - 生成分类标签云（Tag Cloud）及对应的 `/tags/*.md` 页面。
      - 注入构建时间戳 `{{LAST_SYNC}}`。
-  4. 将生成的 `README.md`、`tags/*.md` 和 `daily.*` 自动 Commit 并 Push 回主仓库。
+  4. 将生成的 `README.md`、`tags/*.md` 和 `daily.*` 提交到 `chore/blog-sync`，用 secret `TRAFFIC_PAT` 开 PR 并 squash 合并进 `main`（ruleset 禁止 `GITHUB_TOKEN` 直推默认分支，与流量滚存相同）。
 
 ### 🖼 3.2 图像无损压缩流水线 (`image-compress.yml`)
 - **触发时机**：当 `assets/` 路径下的图片有新增或更新时触发。
