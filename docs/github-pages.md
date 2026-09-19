@@ -49,7 +49,7 @@ One-time GitHub setup:
 3. In GoatCounter: site settings → enable **Allow adding visitor counts on your website** (defaults to off; `/counter/TOTAL.json` returns 403 until this is on). See [visitor counter](https://www.goatcounter.com/help/visitor-counter).
 4. Actions → **Traffic rollup** → Run workflow. It force-pushes `chore/traffic-rollup`, opens a PR, and squash-merges it. Then run **Deploy GitHub Pages** if the site footer script is not live yet.
 
-`main` 要求走 PR。滚存用 `TRAFFIC_PAT`（你的账号）开 PR 并合并，不依赖 Actions 那个「允许创建 PR」开关。若 PAT 仍只有 Administration: Read，开 PR / 合并会失败，请按上面补 Contents 与 Pull requests。
+`main` 要求走 PR。**Traffic rollup** 与 **Blog Sync** 都用 `TRAFFIC_PAT`（你的账号）开 PR 并 squash 合并，不依赖 Actions 那个「允许创建 PR」开关。若 PAT 仍只有 Administration: Read，开 PR / 合并会失败，请按上面补 Contents 与 Pull requests。
 
 GoatCounter’s script ignores `localhost`, so `python3 -m http.server -d public` will not inflate production counts. Local `make sync` also skips the counter snippet unless `GOATCOUNTER_CODE` is in the environment.
 

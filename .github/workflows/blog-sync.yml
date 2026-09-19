@@ -13,19 +13,23 @@ on:
       - 'requirements.txt'
   workflow_dispatch: # 支持手动触发
 
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: blog-sync
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
@@ -35,13 +39,39 @@ jobs:
       - name: Run Sync Script
         run: python scripts/sync.py
 
-      - name: Commit and Push
+      - name: Commit via pull request
+        env:
+          GH_TOKEN: ${{ secrets.TRAFFIC_PAT }}
         run: |
-          git config --global user.name "hanalice"
-          git config --global user.email "hanalice@users.noreply.github.com"
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "TRAFFIC_PAT is empty; cannot create or merge the blog-sync PR" >&2
+            exit 1
+          fi
+          git config user.name "hanalice"
+          git config user.email "hanalice@users.noreply.github.com"
           git add README.md tags/
           # Mascot daily file may be .png/.gif/etc; add directory and ignore missing daily.png
           git add assets/mascots/ || true
           git add -f assets/mascots/daily.png 2>/dev/null || true
-          git commit -m "Auto update README, tags, and mascot" || exit 0
-          git push
+          git add -f assets/mascots/daily.gif 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No README/tags/mascot changes"
+            exit 0
+          fi
+          git commit -m "chore: sync README, tags, and mascot [skip ci]"
+          git push --force origin HEAD:chore/blog-sync
+
+          existing="$(gh pr list --base main --head chore/blog-sync --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$existing" ]; then
+            gh pr create --base main --head chore/blog-sync \
+              --title "chore: sync README, tags, and mascot" \
+              --body "Automated blog sync and mascot rotation. Merged by the Blog Sync workflow."
+          else
+            echo "Branch updated on existing PR #${existing}"
+          fi
+
+          if ! gh pr merge --squash --delete-branch=false chore/blog-sync; then
+            echo "Standard merge blocked; retrying with --admin"
+            gh pr merge --squash --admin --delete-branch=false chore/blog-sync
+          fi
