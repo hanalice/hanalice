@@ -622,6 +622,8 @@ class TestMermaidSupport(unittest.TestCase):
         self.assertIn('mermaid-lightbox', html_out)
         self.assertIn('pinSvgPixelSize', html_out)
         self.assertIn('mermaid-lightbox__zoom', html_out)
+        self.assertIn('mermaid-inline-zoom', html_out)
+        self.assertIn('fitInline', html_out)
         self.assertIn('layer.appendChild(svg)', html_out)
         self.assertNotIn('cloneNode', html_out)
         self.assertNotIn('clone.removeAttribute("width")', html_out)
@@ -630,6 +632,9 @@ class TestMermaidSupport(unittest.TestCase):
         self.assertIn('.mermaid-lightbox', sync._MERMAID_ZOOM_CSS)
         self.assertIn('cursor: zoom-in', sync._MERMAID_ZOOM_CSS)
         self.assertIn('.mermaid-lightbox__zoom', sync._MERMAID_ZOOM_CSS)
+        self.assertIn('.mermaid-inline-zoom', sync._MERMAID_ZOOM_CSS)
+        self.assertIn('overflow: hidden', sync._MERMAID_ZOOM_CSS)
+        self.assertNotIn('overflow-x: auto', sync._MERMAID_ZOOM_CSS)
         self.assertNotIn('height: auto', sync._MERMAID_ZOOM_CSS)
 
 
