@@ -698,12 +698,17 @@ def _filter_script():
 
 MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js'
 
-# 正文内横向滚动；预览层对 wrapper 做 transform，避免 SVG height:auto 拆散 foreignObject。
+# 正文内用 wrapper scale 适配栏宽（不用 SVG height:auto，以免拆散 foreignObject）。
 _MERMAID_ZOOM_CSS = """
 .prose pre:has(code.language-mermaid),
 .prose .mermaid-host {
   cursor: zoom-in;
-  overflow-x: auto;
+  overflow: hidden;
+  overflow-x: hidden;
+}
+.prose .mermaid-inline-zoom {
+  display: inline-block;
+  transform-origin: 0 0;
 }
 .prose code.language-mermaid svg,
 .prose .mermaid svg {
@@ -793,7 +798,32 @@ _MERMAID_BOOT_SCRIPT = """<script>
           openMermaidLightbox(host);
         }
       });
+      fitInline(host);
     });
+    window.addEventListener("resize", function () {
+      document.querySelectorAll(".mermaid-host").forEach(fitInline);
+    });
+  }
+
+  function fitInline(host) {
+    var svg = host.querySelector("svg");
+    if (!svg) return;
+    var size = pinSvgPixelSize(svg);
+    var wrap = svg.parentElement;
+    if (!wrap || !wrap.classList.contains("mermaid-inline-zoom")) {
+      wrap = document.createElement("div");
+      wrap.className = "mermaid-inline-zoom";
+      svg.parentNode.insertBefore(wrap, svg);
+      wrap.appendChild(svg);
+    }
+    var cs = window.getComputedStyle(host);
+    var padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    var padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    var avail = host.clientWidth - padX;
+    var s = Math.min(1, avail / size.w);
+    if (!isFinite(s) || s <= 0) s = 1;
+    wrap.style.transform = "scale(" + s + ")";
+    host.style.height = (size.h * s + padY) + "px";
   }
 
   function pinSvgPixelSize(svg) {
@@ -876,6 +906,7 @@ _MERMAID_BOOT_SCRIPT = """<script>
       overlay.remove();
       document.body.style.overflow = "";
       document.removeEventListener("keydown", onKey);
+      fitInline(host);
     }
 
     function onKey(ev) {
