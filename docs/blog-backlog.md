@@ -104,7 +104,7 @@
   - https://stacklok.com/blog/stackloks-mcp-optimizer-vs-anthropics-tool-search-tool-a-head-to-head-comparison/ — **次要**：2792 tools 上 recall/selection 鸿沟（34% vs 94%）
 - **备注：** Gate PASS ready — 新失败面已锁定为 **Host discovery-layer**。写稿禁令：不要再写 dump-all vs lazy 入门、不要复述 Confusion+Bloat 主框架、不要重画 AWS V1–V4 表。开篇一句「范文已讲 Server/`get_taxonomy`」后立刻进入 Host 五坑。P1（有生产级 Host bug + 检索对照，但非安全 P0）。
 
-### [ready] 2026-09-18 | P0 | agent-memory-poisoning
+### [published] 2026-09-21 | P0 | agent-memory-poisoning
 - **工作标题：** Agent 记得太久：Session Summarization 把间接注入写成跨会话「系统指令」
 - **失败面：** 当天对话看起来正常；隔天/新 session 才静默改行为或外泄 → 误判为「又一次 prompt injection / 模型对齐失败」；根因是 untrusted tool/document output 经 summarization/memory-writer 写入 LTM，再以高特权（system / orchestration memory 槽）跨会话复活
 - **为何够深：** 四段路径 (1) tool/doc 进会话 (2) summarizer / memory tool / 外部 manager 决定写什么 (3) LTM 无 provenance / 信任自抬 (4) 下一 session 拼进 system/orchestration；对照 ephemeral PI vs persistent memory privilege
@@ -120,7 +120,8 @@
   - https://blogs.cisco.com/ai/identifying-and-remediating-a-persistent-memory-compromise-in-claude-code
   - https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ （ASI06）
   - https://arxiv.org/abs/2605.15338 — Sleeper Memory Poisoning
-- **备注：** Gate PASS ready。写稿禁 exploit/payload 复现；只用架构 BAD/GOOD + checklist。下轮 Writer 可取。
+- **已发文：** posts/agent_memory_poisoning.md
+- **备注：** Reviewer approved; Alice 批准 push 2026-09-21。系列下一坑：multi-agent-closed-loop-handoff
 
 ### [ready] 2026-09-18 | P1 | mcp-auth-identity-not-intent
 - **工作标题：** MCP Auth：Identity ≠ Audience（OAuth 绿了，token 没绑到这台 MCP）
@@ -190,3 +191,4 @@
 - 2026-09-18 Scout: upgraded `multi-agent-closed-loop-handoff` idea→ready P0 (closed-loop + termination predicate; tianpan/vectara/MAST/cycle-detect).
 - 2026-09-18 Scout: upgraded `mcp-auth-identity-not-intent` idea→ready P1 (narrowed Identity≠Audience; FastMCP+Toolbox+FrontMCP BADs).
 - 2026-09-18 Scout: upgraded `mcp-progressive-disclosure` idea→ready P1 (Host discovery reframed: recall miss / list_changed / cache; ≠ Server Confusion+Bloat).
+- 2026-09-21 Coordinator: published `agent-memory-poisoning` → posts/agent_memory_poisoning.md (Alice 批准 push).
