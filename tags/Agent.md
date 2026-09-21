@@ -1,9 +1,10 @@
 # Posts Tagged With: #Agent
 
-Total: 6 posts
+Total: 7 posts
 
 ---
 
+- [2026-09-21] [Agent 记得太久：Session Summarization 把间接注入写成跨会话「系统指令」](../posts/agent_memory_poisoning.md)
 - [2026-09-18] [长跑 Agent 挂了：Checkpoint 不等于 Durable Execution](../posts/durable_agent_execution.md)
 - [2026-09-17] [长程 Agent：第一个错 ≠ 决定性错误](../posts/long_horizon_decisive_error.md)
 - [2026-09-16] [Agent 写操作的幂等：超时之后凭什么敢重试](../posts/agent_write_idempotency.md)
