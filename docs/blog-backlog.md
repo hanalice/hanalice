@@ -123,7 +123,7 @@
 - **已发文：** posts/agent_memory_poisoning.md
 - **备注：** Reviewer approved; Alice 批准 push 2026-09-21。系列下一坑：multi-agent-closed-loop-handoff
 
-### [ready] 2026-09-18 | P1 | mcp-auth-identity-not-intent
+### [published] 2026-09-22 | P1 | mcp-auth-identity-not-intent
 - **工作标题：** MCP Auth：Identity ≠ Audience（OAuth 绿了，token 没绑到这台 MCP）
 - **失败面：** Consent / OAuth 看起来成功 → token 缺 `resource`/`aud` 绑定或校验被跳过 → 跨 MCP / 跨应用 / 跨部署重放；误判「再加一层 OAuth / 收紧 scope」
 - **为何够深：** 主线锁 **RFC 8707 resource→aud 绑定 + 拒绝错受众 + MUST NOT passthrough**；OAuth 答的是「谁持有 token」，不是「token 是否发给**这台** MCP」。Intent / 参数策略只作短 coda；proxy consent-skip deputy 另文。非 OAuth 入门
@@ -143,7 +143,8 @@
   - https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
   - https://github.com/BerriAI/litellm/security/advisories/GHSA-7488-6r32-c95q — passthrough 脚注（auth bypass，非经典转发）
   - https://osv.dev/vulnerability/GHSA-5gf6-gc35-xjpc — coda scopesRequired
-- **备注：** Gate PASS ready（主线 A：Identity≠Audience）。经典「client token 原样转发 GitHub」具名 CVE 仍缺——正文标 anti-pattern，勿捏造。slug 保留；标题勿再承诺满 Intent。
+- **已发文：** posts/mcp_auth_identity_not_intent.md
+- **备注：** Reviewer approved; Coordinator auto-push 2026-09-22（新规则，不等 Alice「批准 push」）。系列下一坑：mcp-progressive-disclosure
 
 ### [published] 2026-09-22 | P0 | multi-agent-closed-loop-handoff
 - **工作标题：** 专员互相转交都「成功」：Closed-Loop Escalation / 无终止谓词的 Handoff 环
@@ -194,3 +195,4 @@
 - 2026-09-18 Scout: upgraded `mcp-progressive-disclosure` idea→ready P1 (Host discovery reframed: recall miss / list_changed / cache; ≠ Server Confusion+Bloat).
 - 2026-09-21 Coordinator: published `agent-memory-poisoning` → posts/agent_memory_poisoning.md (Alice 批准 push).
 - 2026-09-22 Coordinator: published `multi-agent-closed-loop-handoff` → posts/multi_agent_closed_loop_handoff.md (Alice 批准 push).
+- 2026-09-22 Coordinator: published `mcp-auth-identity-not-intent` → posts/mcp_auth_identity_not_intent.md (Reviewer Approve → immediate push).
