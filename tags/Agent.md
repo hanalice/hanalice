@@ -1,10 +1,11 @@
 # Posts Tagged With: #Agent
 
-Total: 8 posts
+Total: 9 posts
 
 ---
 
 - [2026-09-22] [专员互相转交都「成功」：无终止谓词的 Handoff 环](../posts/multi_agent_closed_loop_handoff.md)
+- [2026-09-22] [MCP Auth：Identity ≠ Audience——OAuth 绿了，token 没绑到这台 MCP](../posts/mcp_auth_identity_not_intent.md)
 - [2026-09-21] [Agent 记得太久：Session Summarization 把间接注入写成跨会话「系统指令」](../posts/agent_memory_poisoning.md)
 - [2026-09-18] [长跑 Agent 挂了：Checkpoint 不等于 Durable Execution](../posts/durable_agent_execution.md)
 - [2026-09-17] [长程 Agent：第一个错 ≠ 决定性错误](../posts/long_horizon_decisive_error.md)
