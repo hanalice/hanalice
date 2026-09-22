@@ -145,7 +145,7 @@
   - https://osv.dev/vulnerability/GHSA-5gf6-gc35-xjpc — coda scopesRequired
 - **备注：** Gate PASS ready（主线 A：Identity≠Audience）。经典「client token 原样转发 GitHub」具名 CVE 仍缺——正文标 anti-pattern，勿捏造。slug 保留；标题勿再承诺满 Intent。
 
-### [ready] 2026-09-18 | P0 | multi-agent-closed-loop-handoff
+### [published] 2026-09-22 | P0 | multi-agent-closed-loop-handoff
 - **工作标题：** 专员互相转交都「成功」：Closed-Loop Escalation / 无终止谓词的 Handoff 环
 - **失败面：** 局部 handoff 成功 → 全局环；双边 dashboard 双绿；账单先于刹车（bill before brake）
 - **为何够深：** 把 multi-agent handoff 当 **routing fabric** 而非领域抽象——本地路由决策可合成全局环；「Verifier 满意 / 对方更合适」不是可判定终止谓词；observability ≠ enforcement。机制层：per-conversation handoff ledger、reject-and-explain、handoff budget（≠ token budget）、adversarial-seam eval（断言 **bounded termination**）。不是 MAS 入门、不是复述 MAST 14 模式清单
@@ -163,45 +163,8 @@
   - https://www.getmaxim.ai/articles/multi-agent-system-reliability-failure-patterns-root-causes-and-production-validation-strategies/
   - https://towardsai.com/p/machine-learning/we-gave-the-ai-supervisor-structured-tools-so-it-couldnt-hallucinate-it-still-made-the-wrong-call — 次要；全文抓取受限勿捏造引文
   - https://github.com/mastra-ai/mastra/issues/21897 — 次要
-- **备注：** Gate PASS ready。大纲锁死：routing protocol primitives + termination predicate；两种拓扑同属 closed-loop。禁 MAS primer。Writer 勿整段翻译 tianpan。下轮可与 memory 并列 ready（优先仍由 Coordinator kick）。
-
-### [idea] 2026-09-21 | P0 | silent-tool-result-truncation
-- **工作标题：** 工具结果被静默截断：Agent 在半截证据上自信作答
-- **失败面：** tool call「成功」→ Host/框架/传输层按字节或行数裁掉尾部（常无 `truncated: true` 结构字段）→ 模型把碎片当全集推理 → 终答自信错误；误判为「模型忽略证据 / 幻觉」；eval 只看终答假绿
-- **为何够深：** 失败不在工具 schema，而在 **result-fidelity 契约**：确定性消费者遇截断会炸，reasoner 会补全。拆四层（framework cap / transport buffer / display vs model view / memory summarizer 丢 ToolMessage）+ 检测三件套（结构化截断信号、per-tool truncation rate、大结果 fixture eval）+ 架构修复（cursor 分页 / summary-on-truncate / code-execution 蒸馏）。不是「怎么设 token limit」入门
-- **拟用案例 / 对照：**
-  1. **BAD#1 Copilot CLI**：MCP 结果先被截到 ~10KB，下游「过大写文件」机制永远摸不到全量 → 静默坏 base64/JSON（#1732；1.0.9 修）
-  2. **BAD#2 Codex**：v0.56+ 工具/MCP payload ~10KiB/256 行静默掐中段（#6544 / #5913 / #6426）
-  3. **BAD#3 分层不对称**：display 截断 vs model 全量（或反过来）→ 工程师对「模型看见什么」误判
-  4. **对照 / GOOD：** `result_truncated`+原字节数进模型与指标 | 分页/`nextCursor` 或 spill-to-file 指针 | 禁「只拼 head+tail 无结构标志」当默认 | eval 含「答案依赖截断边界之后」的 fixture
-- **相关已发文：** posts/mcp_tool_design_valid_but_wrong.md（不同层）；posts/trajectory_eval_false_green.md（次要互链）；ready `mcp-progressive-disclosure`（Host discovery——**必须划界**：本文是成功调用后的 **result fidelity**）
-- **参考线索：**
-  - https://github.com/github/copilot-cli/issues/1732
-  - https://github.com/openai/codex/issues/6544
-  - https://github.com/openai/codex/issues/5913
-  - https://github.com/anthropics/claude-code/issues/2638
-  - https://tianpan.co/blog/2026-05-10-silent-tool-truncation-8kb-default-agent-reasons-blind
-  - https://community.openai.com/t/tool-response-truncation-on-mcp-connector-responses-that-previously-worked/1383071
-  - https://www.anthropic.com/engineering/code-execution-with-mcp — 次要
-- **备注：** Gate PASS idea。升 ready 前锁死开篇「非 discovery」；禁复述 Confusion+Bloat / list_changed。P0。
-
-### [idea] 2026-09-21 | P1 | mcp-consent-binding-confused-deputy
-- **工作标题：** MCP OAuth Proxy：Consent 绿了仍可能把受害者 token 交给攻击者客户端
-- **失败面：** 用户看到「授权成功」→ Confused Deputy：攻击者完成 consent，把上游 authorize URL 甩给已登录 IdP 的受害者 → IdP 跳过二次同意 → callback 把受害者 token 交给攻击者 client；误判「再收紧 scope / 再加一层 OAuth」
-- **为何够深：** 与 ready `mcp-auth-identity-not-intent`（**Identity≠Audience / RFC 8707 aud**）正交——那篇是 token 绑不绑 **这台 MCP**；本文是 **consent 是否绑到完成 callback 的浏览器会话**。机制：IdP「曾授权则跳过 consent」× proxy 未校验 consenting browser ↔ IdP callback；修复原语 `MCP_CONSENT_BINDING`。非 OAuth 入门、非复述 aud CVE 表
-- **拟用案例 / 对照：**
-  1. **BAD#1 FastMCP <3.2.0** CVE-2026-27124 / GHSA-rww4-4w9c-7733：`_handle_idp_callback` 只验 state+code，不验 consenting browser
-  2. **GOOD fix** PR #3201：consent 批准时设 signed `MCP_CONSENT_BINDING`，callback 不匹配 → 403
-  3. **BAD#2 配置残留：** `require_authorization_consent=False`（及 `"external"`）无法设 binding cookie → 原攻击面仍开
-  4. **对照表：** Identity≠Audience（token aud）| Consent-binding（browser↔txn）| IdP skip-consent（非漏洞）| AS-in-the-middle（consent 文案层）
-- **相关已发文：** ready `mcp-auth-identity-not-intent`（**必须划界**：开篇一句「Audience 另文」）；posts/mcp_tool_design_valid_but_wrong.md 仅系列互链
-- **参考线索：**
-  - https://nvd.nist.gov/vuln/detail/CVE-2026-27124
-  - https://github.com/PrefectHQ/fastmcp/security/advisories/GHSA-rww4-4w9c-7733
-  - https://github.com/PrefectHQ/fastmcp/pull/3201
-  - https://gofastmcp.com/servers/auth/oauth-proxy
-  - https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization — 次要
-- **备注：** Gate PASS idea（parked angle C）。升 ready 时禁重画 aud BAD 表；exploit 只写机制叙事，不写可操作 PoC。P1。
+- **已发文：** posts/multi_agent_closed_loop_handoff.md
+- **备注：** Reviewer approved; Alice 批准 push 2026-09-22。系列下一坑：mcp-auth-identity-not-intent / mcp-progressive-disclosure
 
 ### [published] 2026-09-15 | P0 | mcp-valid-but-wrong
 - **工作标题：** MCP 工具设计：合法但错误的调用
@@ -230,4 +193,4 @@
 - 2026-09-18 Scout: upgraded `mcp-auth-identity-not-intent` idea→ready P1 (narrowed Identity≠Audience; FastMCP+Toolbox+FrontMCP BADs).
 - 2026-09-18 Scout: upgraded `mcp-progressive-disclosure` idea→ready P1 (Host discovery reframed: recall miss / list_changed / cache; ≠ Server Confusion+Bloat).
 - 2026-09-21 Coordinator: published `agent-memory-poisoning` → posts/agent_memory_poisoning.md (Alice 批准 push).
-- 2026-09-21 Scout: add 2 ideas — silent-tool-result-truncation (P0), mcp-consent-binding-confused-deputy (P1, parked angle C); skip schema-drift-retry / list_changed / orphan-tool-msg / priority-inversion / token-expiry.
+- 2026-09-22 Coordinator: published `multi-agent-closed-loop-handoff` → posts/multi_agent_closed_loop_handoff.md (Alice 批准 push).
