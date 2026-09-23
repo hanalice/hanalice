@@ -104,7 +104,7 @@
   - https://stacklok.com/blog/stackloks-mcp-optimizer-vs-anthropics-tool-search-tool-a-head-to-head-comparison/ — **次要**：2792 tools 上 recall/selection 鸿沟（34% vs 94%）
 - **备注：** Gate PASS ready — 新失败面已锁定为 **Host discovery-layer**。写稿禁令：不要再写 dump-all vs lazy 入门、不要复述 Confusion+Bloat 主框架、不要重画 AWS V1–V4 表。开篇一句「范文已讲 Server/`get_taxonomy`」后立刻进入 Host 五坑。P1（有生产级 Host bug + 检索对照，但非安全 P0）。
 
-### [ready] 2026-09-22 | P1 | mcp-consent-binding-confused-deputy
+### [published] 2026-09-23 | P1 | mcp-consent-binding-confused-deputy
 - **工作标题：** MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）
 - **失败面（OAuth Proxy consent→callback 绑定层，非 aud/resource）：** 攻击者在自己浏览器完成 MCP consent → 截获上游 IdP authorize URL → 诱骗已登录且曾授权过同 IdP client 的受害者打开 → IdP 因「已授权」跳过 consent → Proxy `_handle_idp_callback` 只验 `state`+`code`、不验「发 callback 的浏览器是否刚同意过」→ 受害者 token 落到攻击者 client。误判「再加一层 OAuth / 收紧 scope / 怪 IdP 跳过 consent」
 - **为何够深（非科普）：** 主线锁 **consent approval ↔ IdP callback 的浏览器会话绑定**（signed `MCP_CONSENT_BINDING` / per-client consent registry），不是 Identity≠Audience 的 resource→aud。IdP 跳过 consent 本身合法；根因是 Proxy 当 confused deputy。`require_authorization_consent=False` 路径仍无 cookie 可绑——部署级残留坑。非 OAuth 入门、非复述 RFC 8707
@@ -113,14 +113,15 @@
   2. **机制对照：** consent 页 CSRF/signed cookie 只证「用户点了同意」≠ 把同意绑到后续 IdP callback 的同一 UA；缺 binding → 跨浏览器完成流
   3. **GOOD：** 同意时发 signed `__Host-MCP_CONSENT_BINDING`（txn_id→token）| callback 校验 cookie 匹配否则 403 | per-client consent registry（MCP Security Best Practices）| 禁止在 consent 批准前写 state cookie | 生产勿关 `require_authorization_consent`
   4. **残留坑：** consent 关闭时 `authorize()` 返回 URL 字符串、无法 Set-Cookie → binding 检查跳过（PR #3201 明示）
-- **相关已发文：** 与 ready `mcp-auth-identity-not-intent`（Identity≠Audience / RFC 8707 aud）**必须划界**：那篇 = token 是否发给**这台** MCP；本文 = consent 是否绑到**完成 callback 的浏览器** / CWE-441。与 `agent-memory-poisoning`（LTM）、`mcp-progressive-disclosure`（Host discovery）不重叠。范文 mcp_tool_design_valid_but_wrong 不同层
+- **相关已发文：** 与已发文 `mcp-auth-identity-not-intent`（Identity≠Audience / RFC 8707 aud）**必须划界**：那篇 = token 是否发给**这台** MCP；本文 = consent 是否绑到**完成 callback 的浏览器** / CWE-441。与 `agent-memory-poisoning`（LTM）、`mcp-progressive-disclosure`（Host discovery）不重叠。范文 mcp_tool_design_valid_but_wrong 不同层
 - **参考线索：**
   - https://github.com/PrefectHQ/fastmcp/security/advisories/GHSA-rww4-4w9c-7733 — CVE-2026-27124；affected <3.2.0
   - https://www.cve.org/CVERecord?id=CVE-2026-27124
   - https://github.com/PrefectHQ/fastmcp/pull/3201 — `MCP_CONSENT_BINDING` cookie fix；consent-disabled 残留说明
   - https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices — Confused Deputy；per-client consent；consent cookie MUST bind `client_id`
   - https://nvd.nist.gov/vuln/detail/CVE-2026-27124 — CWE-441
-- **备注：** Gate PASS ready（主线：consent→callback browser binding / confused deputy）。写稿禁令：不要复述 Identity≠Audience 的 aud/resource BAD 表；开篇一句划界后立刻进入 consent binding。P1（High CVE + 规范明确 mitigations；与 sibling auth 同级）。正文勿逐步复现 exploit（advisory 已有步骤，引用即可）。
+- **已发文：** posts/mcp_consent_binding_confused_deputy.md
+- **备注：** Reviewer approved; Coordinator auto-push 2026-09-23（新规则）。弱项标「周末 Alice 必改」。系列下一坑：mcp-progressive-disclosure。
 
 ### [published] 2026-09-21 | P0 | agent-memory-poisoning
 - **工作标题：** Agent 记得太久：Session Summarization 把间接注入写成跨会话「系统指令」
@@ -216,3 +217,4 @@
 - 2026-09-22 Coordinator: published `mcp-auth-identity-not-intent` → posts/mcp_auth_identity_not_intent.md (Reviewer Approve → immediate push).
 - 2026-09-22 Scout: add ready mcp-consent-binding-confused-deputy (Tue light; FastMCP consent→callback confused deputy); PR #29
 - 2026-09-22 Scout: rebase #29 onto main after mcp-auth published.
+- 2026-09-23 Coordinator: published `mcp-consent-binding-confused-deputy` → posts/mcp_consent_binding_confused_deputy.md (Reviewer Approve → immediate push; 周末 Alice 必改).
