@@ -1,9 +1,10 @@
 # Posts Tagged With: #MCP
 
-Total: 3 posts
+Total: 4 posts
 
 ---
 
+- [2026-09-23] [MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）](../posts/mcp_consent_binding_confused_deputy.md)
 - [2026-09-22] [MCP Auth：Identity ≠ Audience——OAuth 绿了，token 没绑到这台 MCP](../posts/mcp_auth_identity_not_intent.md)
 - [2026-09-16] [Agent 写操作的幂等：超时之后凭什么敢重试](../posts/agent_write_idempotency.md)
 - [2026-09-15] [MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用](../posts/mcp_tool_design_valid_but_wrong.md)
