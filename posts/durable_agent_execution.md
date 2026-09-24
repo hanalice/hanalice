@@ -13,9 +13,29 @@ description: 有 Postgres checkpointer、能 resume，不等于扛得住杀进�
 
 ### 现象 A：Postgres checkpointer「看起来活了」——二次 charge
 
-你按文档接上 `PostgresSaver`，`thread_id` 稳定。演示：跑到扣款节点中途 `kill` 进程 → 重启 → `invoke(None, config)` → 图「继续了」。值班同学拍板：已经 crash-proof。
+值班验收「看起来合理」：
 
-真实世界：节点里先 `charge_card()` 成功，再写审计、再 return 状态。崩溃落在「已扣款、未返回」窗口。Checkpoint 只在 **super-step / 节点边界** 落盘；半截节点没有快照。Resume 整节点从开头重入 → 再扣一次。Demo 测的是「thread 能接着」；没测「节点内副作用是否只发生一次」。
+```python
+from langgraph.checkpoint.postgres import PostgresSaver
+
+with PostgresSaver.from_conn_string(DB_URL) as checkpointer:
+    checkpointer.setup()  # 首次建表
+    graph = builder.compile(checkpointer=checkpointer)
+
+config = {"configurable": {"thread_id": "refund-job-42"}}  # 必须稳定；换 ID = 新 thread
+
+
+def charge_card(state):
+    charge(state["payment_id"])   # 副作用在 return 前
+    # kill 落在这里：节点未 return → 没有「已扣款」快照
+    return {"charged": True}
+
+
+graph.invoke({"payment_id": "pay_1"}, config)  # 跑到 charge_card 中途 kill
+graph.invoke(None, config)                    # 新进程、同一 thread_id：图「继续了」
+```
+
+Checkpoint 只在 **super-step / 节点边界** 落盘；半截节点没有快照。Resume 时 `charge_card` **从函数开头重入** → `charge()` 再打一次。Demo 测的是「thread 能接着」；没测「节点内副作用是否只发生一次」。这不是「你没用对 Saver」，是恢复粒度就是节点边界。
 
 ### 现象 B：`interrupt()` 前写审计——审批回来日志翻倍
 
@@ -96,13 +116,19 @@ Checkpointer 在每个 super-step 提交完整 `StateSnapshot`；同一 super-st
 
 ### 3.2 `durability`：`exit` | `async` | `sync`
 
-| 模式 | 何时落盘 | 中途进程崩溃 | 代价 |
-| --- | --- | --- | --- |
-| `exit` | 图退出（含 HITL interrupt）时 | **不能**从中间步恢复 | 最快 |
-| `async` | 下一步执行同时异步写 | 小窗口可能丢最近 checkpoint | 折中 |
-| `sync` | 下一步开始前同步写完 | 边界内一致性最好 | 有写放大 |
+`compile(checkpointer=...)` 决定快照**写到哪**（Postgres / 内存）。`durability` 是 **`invoke` / `stream` 的参数**，决定快照**何时写**。两者缺一，跨进程 resume 都不成立。它不改变 3.1 的恢复粒度：任何模式下，正在跑、尚未 `return` 的那个节点都没有行级游标。
 
-生产长跑若仍默认「能 resume 就行」却用 `exit` 或 `InMemorySaver`，等于只对「干净 interrupt / 干净关机」做了演示级持久化。
+用第 4 节那张三节点图，人已经批过、一次 `invoke` 连续往前跑：`approval_node`（立刻 return）→ `audit_and_notify_node` → `refund_node`。在 `refund_node` 里 `charge_refund()` 已发生、尚未 `return` 时 `kill`：
+
+| 模式 | 何时落盘 | 这次 kill 之后库里有什么 | 再 `invoke(None)` |
+| --- | --- | --- | --- |
+| `exit` | **整张图退出**时才写（成功 / 抛错 / `interrupt` 挂起）。节点与节点之间不写 | 往往还停在更早的快照（例如上次 interrupt）。`audit` 已成功那一步可能没落盘 | 可能把 **audit + refund 整段再跑**；中途崩溃 **不能**从「下一个节点」恢复 |
+| `async` | 下一步已经开始跑，同时**异步**写上一边界 | 多数时候有「下一步 = refund」；崩溃窗口里可能丢掉最近一次边界 | 通常只重跑 `refund_node`；小窗口下会像 `exit` 一样倒退 |
+| `sync` | **下一步开始前**同步写完当前边界 | 「`audit` 已完成、下一步 `refund`」一定在盘上（只要 `audit` 已 return） | 只重跑 `refund_node`；`charge_refund` 仍可能再执行一遍——所以还要幂等键（3.1 / 3.4） |
+
+`interrupt` 本身算图退出，所以 **`exit` 也能保住「等人批」的挂起**；值班用 `exit` 演示 HITL resume，看起来也是绿的。假绿在后半段：审批回来之后的多节点冲刺，`exit` 不在节点之间落盘，发布流水线中途 `kill` 就会倒退整段。长跑生产要中途可恢复时用 `sync`（或接受 `async` 的小窗口），不要默认 `exit`，也不要用 `InMemorySaver`（进程一死连库都没有）。
+
+官方说明见 [Checkpointers · Durability modes](https://docs.langchain.com/oss/python/langgraph/checkpointers)。
 
 ### 3.3 Temporal / 事件源：Activity 结果进历史；Approval = Signal
 
@@ -125,92 +151,125 @@ HITL 对照（机制，不是入门教程）：
 | 多日 HITL 是否占 Worker | 进程内 wait → 占着或一杀就丢 | Signal / 事件停工 → **不占算力** | 无关 |
 | 确定性约束 | 节点逻辑无强制确定性（但重入会放大非幂等） | Workflow 必须确定性；非确定进 Activity | 键稳定复用 |
 
+第 4 节按这张表走同一笔退款：先写生产里怎么接，再写这条链上的错法、改法，以及死在 `send_email` 时 `exit` / `sync` / Activity 各留下什么。
+
 ---
 
-## 4. BAD / GOOD：同一次退款审批 (BAD / GOOD)
+## 4. 同一笔退款：怎么接、错在哪、改完怎么走
 
-场景：Agent 提议退款 → 人工审批 → 扣款冲正 / 发确认邮件。审批可能隔夜；进程会被发布流水线杀掉。
+贯穿全文的都是这一单：`thread_id="refund-job-42"`，`payment_id="pay_1"`，金额 80。链路：Agent 起草 → 人在页面上批准（可隔夜，发布会杀进程）→ 审计 / Slack → 冲正 → 确认邮件。现象 A / B / C 和第 3 节的 3.1–3.4 都标在这条链上。
 
-### BAD：「看起来合理」的 checkpointer + 内存门控 + interrupt 前副作用
+生产里常见的接法是：**LangGraph 管这张图，审批是图外面的另一次 HTTP 调用。** 多日等待靠 `interrupt` 把快照写入 Postgres，进程可以退出。Temporal 不是这条链的默认运行时；它出现在 4.4，专门解决「`refund_node` 里面记不住扣款已经成功」。
+
+### 4.1 常见接法
+
+图只有三个 super-step：`approval_node → audit_and_notify_node → refund_node`。`charge_refund()` 和 `send_email()` 是最后一个节点里的两行，不是两个节点。
 
 ```python
-# ❌ 三件事叠在一起：边界恢复 + 非幂等前置副作用 + 进程内等待心态
-from langgraph.checkpoint.postgres import PostgresSaver
-from langgraph.types import interrupt
+from langgraph.types import Command
 
-checkpointer = PostgresSaver.from_conn_string(DB_URL)  # 「有 Postgres 了」
-graph = builder.compile(checkpointer=checkpointer)
+config = {"configurable": {"thread_id": "refund-job-42"}}
 
-def refund_approval_node(state):
-    # 1) 非幂等：每次节点重入多一条审计
-    db.create_audit_log(user=state["user_id"], action="refund_pending")
-    # 2) 通知也在 interrupt 前 → resume 再发一遍
-    notify_slack(f"Approve refund {state['amount']}?")
+# 发起退款。跑到 interrupt 就返回，把待批内容留给页面
+graph.invoke({"payment_id": "pay_1", "amount": 80}, config, durability="sync")
+pending = graph.get_state(config).interrupts
 
-    approved = interrupt({"amount": state["amount"], "user": state["user_id"]})
-
-    if approved:
-        charge_refund(state["payment_id"], state["amount"])  # 若与上半截同节点且中途崩过，仍可能双触
-        send_email(state["user_id"], "refunded")
-    return {"approved": approved}
-
-# 调用侧还可能：
-# graph.stream(..., durability="exit")  # 中途崩溃不可恢复
-# 或另写 while not flag: sleep 在图外「等审批」——kill -9 后门控蒸发
+# 人点「批准」时，审批接口用同一 thread 再调一次。图里没有 hook
+graph.invoke(Command(resume=True), config, durability="sync")
 ```
 
-失败剧本：
+第一次调用停在 `approval_node`。第二次调用从该节点开头再进，`interrupt()` 拿到 `True` 后，**同一次调用**继续审计和冲正，直到 `END`。节点 `return` 的 `approved`、`status` 由 LangGraph 合并进 `StateSnapshot.values`，不是框架自带字段。
 
-1. 第一次跑到 `interrupt` 前已写审计 + Slack；审批挂起。
-2. 发布 `kill -9`：若门控只在内存，线程没了；若靠 checkpointer 挂起，resume 后节点从头跑 → 审计 / Slack 翻倍。
-3. 扣款写在「长节点」中段且崩溃在 return 前 → 整节点重入再扣（除非工具层有幂等键——见幂等文；编排层仍不该依赖运气）。
+### 4.2 这条链上容易写错的样子
 
-### GOOD：副作用过门控之后；等待事件化；危险调用有边界与键
+下面仍是 `pay_1`，只是把等待、审计、扣款塞进一个函数，并用 `durability="exit"`。
 
 ```python
-# ✅ interrupt 节点只做门控；副作用在其后独立节点；工具层仍带幂等键
+def refund_job(state):
+    db.create_audit_log(...)          # B / 3.1：interrupt 前的写，resume 会再做一遍
+    notify_slack(...)
+    approved = interrupt({...})
+    if approved:
+        charge_refund(...)             # A / 3.1：和门控同一节点，死在 return 前整段重入
+        send_email(...)                # 3.4：没有幂等键
+    return {"approved": approved}
+
+while not human_flag:                  # C / 3.3：门控在进程内存里
+    time.sleep(1)
+graph.invoke({"payment_id": "pay_1", "amount": 80}, config, durability="exit")
+```
+
+`while` 一被 `kill`，审批蒸发（现象 C）。改成只靠 `interrupt` 再 resume，审计和 Slack 翻倍（现象 B）。扣款若发生在 `return` 之前，再扣一次（现象 A）。`exit` 只在图退出时写盘（3.2）：停在 `interrupt` 看起能恢复，人批完后的这段节点之间没有快照。
+
+### 4.3 同一条链改完
+
+改三处，单还是 `pay_1`，存储还是 Postgres checkpointer。
+
+| 相对 4.2 | 为什么 | 现象 / 机制 |
+| --- | --- | --- |
+| 删掉 `while`，只留 `interrupt` | 审批在快照里，杀进程杀不到门控 | C / 3.3 |
+| 审计和 Slack 挪到 `interrupt` 之后的节点，用 upsert | resume 仍会重跑含 `interrupt` 的节点，但那段已经没有副作用 | B / 3.1、3.4 |
+| 扣款和发信放进 `refund_node`，调用带幂等键；人批完这次 `invoke` 用 `sync` | 崩溃只重跑这一个节点；两行仍会一起再执行，靠 key 收成一笔 | A / 3.1、3.2、3.4 |
+
+```python
 def approval_node(state):
-    decision = interrupt({
-        "question": "Approve refund?",
-        "amount": state["amount"],
-        "payment_id": state["payment_id"],
-    })
-    return {"approved": bool(decision)}
+    decision = interrupt({"payment_id": state["payment_id"], "amount": state["amount"]})
+    return {"approved": bool(decision)}          # 写入 values["approved"]
 
 def audit_and_notify_node(state):
-    # 仅在 approved 之后执行；节点本身用 upsert / 自然键保证重入安全
     if not state["approved"]:
         return {"status": "rejected"}
     db.upsert_audit(payment_id=state["payment_id"], action="refund_approved")
-    notify_slack_once(key=f"refund:{state['payment_id']}", text="approved")
-    return {"status": "audited"}
+    notify_slack_once(key=f"refund:{state['payment_id']}")
+    return {"status": "audited"}                 # 写入 values["status"]
 
 def refund_node(state):
     if state["status"] != "audited":
         return state
-    # 与幂等文同一层：编排可重入，Server 同 key 只落一笔
-    charge_refund(
-        payment_id=state["payment_id"],
-        amount=state["amount"],
-        idempotency_key=f"{state['thread_id']}:refund:{state['payment_id']}",
-    )
-    send_email(..., idempotency_key=f"{state['thread_id']}:email:{state['payment_id']}")
+    key = f"{state['thread_id']}:{state['payment_id']}"
+    charge_refund(state["payment_id"], state["amount"], idempotency_key=f"{key}:refund")
+    send_email(..., idempotency_key=f"{key}:email")   # 与上一行同一个 super-step
     return {"status": "done"}
 
-graph = builder.compile(checkpointer=postgres_saver)
-# 长跑生产：显式 sync；并确认不是 InMemorySaver
-graph.invoke(inputs, config=config, durability="sync")
+builder.add_edge(START, "approval_node")
+builder.add_edge("approval_node", "audit_and_notify_node")
+builder.add_edge("audit_and_notify_node", "refund_node")
+builder.add_edge("refund_node", END)
+graph = builder.compile(checkpointer=postgres_saver)  # 快照按 thread_id 写入 Postgres
 ```
 
-Temporal 侧对照（机制摘录，非 Hello World）：Workflow 里 `await workflow.wait_condition(lambda: self.decision is not None, timeout=...)`；外部 `signal` 写入决策；等待期间 Worker 不空转占坑。事件源对照：policy 命中 `payments.*` → 写 `ToolApprovalRequired` → settle → 进程可死；`approve` 后再 dispatch。
+`compile(checkpointer=...)` 只负责快照写到哪。它不记录节点内部执行到哪一行。
 
-Tradeoff 写清楚：checkpointer + `@task` + `durability="sync"` + 工具幂等，对**短跑、低并发、副作用已幂等**的图往往够用；多日 HITL、水平扩展多 worker、必须「已完成步骤绝不重打外部世界」时，需要 Event History / 外置编排来接管生命周期——不是再买一次「更强的 Saver」。
+### 4.4 两个崩溃点
+
+都用 4.3 的图。`async` 和 `sync` 一样在节点之间写，但写完前被杀会丢掉最近一张快照，退款这条后半段不要用它。
+
+**停在 `interrupt`，人还没批。** 第一次 `invoke` 已经返回。`exit` 和 `sync` 都会留下快照：`next` 是 `approval_node`。进程杀掉不影响等待。人点批准必须再调 `Command(resume=True)`，图里不会自己继续。
+
+**审计已 `return`，`charge_refund()` 已返回，死在 `send_email()`。** 这发生在人批完的那一次调用里。
+
+| | 库里最新快照 | 下一步调用 |
+| --- | --- | --- |
+| `exit` | 仍是「停在 `interrupt`」。`approved` 和 `status` 都没写上 | 再送 `Command(resume=True)`，三个节点再跑；扣款靠幂等键 |
+| `sync` | `status="audited"`，`next` 是 `refund_node` | `invoke(None, config)` 只重跑 `refund_node`。扣款和发信都从第一行再执行 |
+
+`sync` 记住的是「`refund_node` 还没 `return`」，不是「扣款已经成功」。要让死在发信时不再打支付网关，得把两次调用拆成两条完成记录。那是另一套运行时，不是把 `durability` 再调严一点：
+
+```python
+await workflow.wait_condition(lambda: self.approved is not None)          # 对应 interrupt
+await workflow.execute_activity(charge_refund, args=["pay_1", 80])        # 完成后写入 History
+await workflow.execute_activity(send_email, args=["pay_1"])                # kill 在这里：只重调度发信
+```
+
+两次调用若仍写在同一个 Activity 里，就退回 `refund_node`：没有完成事件，扣款还会再调度。
+
+多日审批用 4.3 就够：等人的是快照，不是 Worker。要换 Temporal（或 SAP 一类流程引擎）当外层，是因为已完成的扣款不能重放，或者多个 Worker 会同时 resume 同一个 `thread_id`。Agent 图缩成外层里的一步「起草这 80 元」；批准和过账不要留在 `refund_node` 里面。
 
 ---
 
 ## 5. 发版前清单：对准崩溃注入点 (Pre-Ship Checklist)
 
-上线任何「可 resume」的长跑 Agent / HITL 图之前，用注入而不是演示证明：
+对照第 4 节的两个崩溃点（停在 `interrupt`，以及死在 `send_email`）用注入而不是演示证明：
 
 **恢复粒度**
 
@@ -252,7 +311,7 @@ Tradeoff 写清楚：checkpointer + `@task` + `durability="sync"` + 工具幂等
 
 - LangGraph：resume / `interrupt` **从节点开头重跑**；`interrupt` 前副作用必须幂等或后移；`durability=exit|async|sync` 与 `InMemorySaver` 决定有没有中途可恢复点。
 - 三层分工：图快照管 thread 状态；Event History / Activity 管步骤级回放；工具幂等键管单次写重试——[幂等文](posts/agent_write_idempotency.md)是第 3 层，本文是第 1↔2 层。
-- HITL：进程内 wait 一杀就丢；Signal / 事件化审批先落盘再停工，等待零算力。
+- 多日审批：`interrupt` 把门控写入快照即可，进程不用空等。已完成的扣款不能重放、或多 Worker 抢同一 `thread_id` 时，外层改用 Event History（第 4.4 节）。
 - 发版证明靠崩溃注入，不靠「手动 restart 看起来活了」的 demo。
 
 系列位置：工具面 → 评估假绿 → 写路径幂等 → 过程归因 → **执行持久化（本文）**。下一坑可转向多 agent 交接的状态所有权，或 discovery 层的工具渐进暴露——都与「生产里到底保证了什么」有关，但杠杆不同。
@@ -263,13 +322,16 @@ Tradeoff 写清楚：checkpointer + `@task` + `durability="sync"` + 工具幂等
 
 1. LangChain Docs — [Interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts)（resume 从含 `interrupt` 的节点开头重跑；`interrupt` 前副作用须幂等或置于其后 / 独立节点）。
 2. LangChain Docs — [Checkpointers](https://docs.langchain.com/oss/python/langgraph/checkpointers)（super-step 边界快照；`durability`：`exit` / `async` / `sync`；`exit` 无中途崩溃恢复）。
-3. Temporal Docs — [Durable AI](https://docs.temporal.io/ai)（Durable Execution 与 Approval / Entity 模式入口）。
-4. Temporal Docs — [Approval pattern](https://docs.temporal.io/design-patterns/approval)（Signal + `wait_condition`；审批数据进 Workflow History）。
-5. Temporal Docs — [Human-in-the-loop AI agent (Python cookbook)](https://docs.temporal.io/ai-cookbook/human-in-the-loop-python)（Signal 审批；等待期不占算力；durable timer）。
-6. Temporal Learn — [Durable AI agent tutorial](https://learn.temporal.io/tutorials/ai/durable-ai-agent/)（Activity 结果进入 Event History 的机制引用）。
-7. Dex Mareno / dreaming.press — [LangGraph Checkpointing vs Temporal: Why Checkpoints Aren't Durable Execution](https://dreaming.press/posts/langgraph-checkpointing-vs-temporal-durable-execution.html)（节点边界 vs Activity；并发 resume；`@task` / `durability="sync"`）。
-8. Yaron Schneider (Diagrid) — [Checkpoints Are Not Durable Execution](https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows)（无自动失败检测/恢复；同 `thread_id` 并发无内置协调）。
-9. Render — [Human-in-the-loop without the hacks](https://render.com/articles/human-in-the-loop-without-the-hacks-pausing-an-agent-mid-run-for-approval-workfl)（内存等待失败面；resume-as-restart 讨论）。
-10. JamJet — [Approvals That Survive kill -9](https://jamjet.dev/blog/approvals-that-survive-kill-9/)（`ToolApprovalRequired` 事件化后再停工）。
-11. Zylos Research — [Durable execution for agent runtimes](https://zylos.ai/research/2026-04-24-durable-execution-agent-runtimes/)（会话记忆 ≠ durable execution；journal + 故意 crash 测试）。
-12. 本站 — [Agent 写操作的幂等：超时之后凭什么敢重试](posts/agent_write_idempotency.md)（工具层幂等键；与本文执行持久化层分工）。
+3. LangChain Docs — [Add memory](https://docs.langchain.com/oss/python/langgraph/add-memory)（`PostgresSaver.from_conn_string` + 首次 `setup()`；生产用数据库 checkpointer）。
+4. LangChain Docs — [Time travel](https://docs.langchain.com/oss/python/langgraph/use-time-travel)（`graph.invoke(None, config)` 从该 thread 最新 / 指定 checkpoint 继续）。
+5. LangChain Docs — [Persistence](https://docs.langchain.com/oss/python/langgraph/persistence)（`InMemorySaver` 重启即丢；`thread_id` 建议不超过 255 字符）。
+6. Temporal Docs — [Durable AI](https://docs.temporal.io/ai)（Durable Execution 与 Approval / Entity 模式入口）。
+7. Temporal Docs — [Approval pattern](https://docs.temporal.io/design-patterns/approval)（Signal + `wait_condition`；审批数据进 Workflow History）。
+8. Temporal Docs — [Human-in-the-loop AI agent (Python cookbook)](https://docs.temporal.io/ai-cookbook/human-in-the-loop-python)（Signal 审批；等待期不占算力；durable timer）。
+9. Temporal Learn — [Durable AI agent tutorial](https://learn.temporal.io/tutorials/ai/durable-ai-agent/)（Activity 结果进入 Event History 的机制引用）。
+10. Dex Mareno / dreaming.press — [LangGraph Checkpointing vs Temporal: Why Checkpoints Aren't Durable Execution](https://dreaming.press/posts/langgraph-checkpointing-vs-temporal-durable-execution.html)（节点边界 vs Activity；并发 resume；`@task` / `durability="sync"`）。
+11. Yaron Schneider (Diagrid) — [Checkpoints Are Not Durable Execution](https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows)（无自动失败检测/恢复；同 `thread_id` 并发无内置协调）。
+12. Render — [Human-in-the-loop without the hacks](https://render.com/articles/human-in-the-loop-without-the-hacks-pausing-an-agent-mid-run-for-approval-workfl)（内存等待失败面；resume-as-restart 讨论）。
+13. JamJet — [Approvals That Survive kill -9](https://jamjet.dev/blog/approvals-that-survive-kill-9/)（`ToolApprovalRequired` 事件化后再停工）。
+14. Zylos Research — [Durable execution for agent runtimes](https://zylos.ai/research/2026-04-24-durable-execution-agent-runtimes/)（会话记忆 ≠ durable execution；journal + 故意 crash 测试）。
+15. 本站 — [Agent 写操作的幂等：超时之后凭什么敢重试](posts/agent_write_idempotency.md)（工具层幂等键；与本文执行持久化层分工）。
