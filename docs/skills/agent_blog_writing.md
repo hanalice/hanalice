@@ -1,7 +1,8 @@
 # Skill: Agent 技术博文写作规范
 
 > 适用于 `hanalice/hanalice` 仓库 `posts/` 下的技术博文。  
-> 标杆范文：`posts/mcp_tool_design_valid_but_wrong.md`。  
+> **结构标杆范文：** `posts/durable_agent_execution.md`（问题→根因→机制/解法→同一案例错对→清单→小结+参考）。  
+> **语气与深度参考：** `posts/mcp_tool_design_valid_but_wrong.md`、`posts/agent_write_idempotency.md`（仍须含 `description`）。  
 > 用语细则另见同目录 `github_profile_engineering.md` §8。  
 > **选题来源：** 滚动文件 `docs/blog-backlog.md`（由选题 Agent 持续补充，**不是**本文内的固定列表）。
 
@@ -38,7 +39,7 @@
 - 状态机：`idea` → `ready` → `writing` → `in_review` → `published` | `rejected` | `parked`  
 - 选题 Agent：**只负责**调研并追加/更新 backlog（可改优先级，不直接写 `posts/`）  
 - 写稿 Agent：只从状态为 `ready` 的条目取最高优先级一条，改为 `writing`  
-- 审阅 Agent：对照本文 §3–§7 与验收清单，通过则 `published`（允许推送），否则回 `writing` 并写修改意见  
+- 审阅 Agent：对照本文 §3–§7 与验收清单；**Approve = ship-ready**（不够深则 request changes，不软通过）；通过后 Coordinator **立即** push，不重等 Alice「批准 push」
 
 ### 2.3 backlog 条目模板
 
@@ -57,17 +58,33 @@
 
 ## 3. 文章结构模板 (Structure)
 
-默认六段（可按坑调整，但不得缺「现象 / 根因 / 可落地」）：
+**默认六段，以后所有新博文按此写**（可按坑微调小节名，但不得缺「现象 / 根因 / 机制解法 / 同一案例错对 / 清单 / 小结+参考」）：
 
 ```text
-1. 问题现象 (Problem Symptoms) — 2～3 短案例 A/B/C
-2. 根因分析 (Root Cause Analysis) — 可命名框架 + 表
-3. 机制 / 协议要点 — 只用规范专名；比喻不作术语
-4. 设计演进或 BAD/GOOD
-5. 发版前清单
-6. 小结 + 下一坑预告
-参考 (References)
+1. 问题现象 (Problem Symptoms)
+   — 先罗列 2～3 个短案例 A/B/C；每个「看起来合理」却失败
+2. 根因分析 (Root Cause Analysis)
+   — 可命名分层 / 对照表；说清误判（把多层保证叠成一个词）
+3. 机制 / 解法要点 (Mechanism / Solutions)
+   — 可复用的改法与边界（专名在前）；不是产品说明书，不是入门教程
+4. 同一条业务链：怎么接、错在哪、改完怎么走
+   — 案例+代码贯穿同一业务 ID；先错后对；每处改动回扣第 3 节哪条解法
+5. 发版前清单 (Pre-Ship Checklist)
+   — 可勾选；对准可注入的失败点，不靠「演示看起来绿」
+6. 小结 (Takeaways) + 系列位置 / 下一坑预告
+参考 (References) — 可追溯官方文档与站内互链
 ```
+
+**结构标杆：** 对照 `posts/durable_agent_execution.md` 第 1–6 节与参考，不要再以 MCP 篇当结构模板（MCP / 幂等篇只作语气与深度参考）。
+
+### 3.1 第 4 节硬规则（连续性）
+
+- **同一条业务线贯穿**：同一 `thread_id` / 业务主键（如退款单）从错法写到改法再到崩溃点  
+- **先错后对**：读者必须能看出「错误长什么样」和「正确长什么样」  
+- **解法可回溯**：每个修复点用表或旁注标明对应第 3 节哪一条（如「B / 3.1」）  
+- **代码可对照**：BAD 与 GOOD 不是两套无关 demo；改动处要看得见  
+
+### 3.2 Frontmatter 与 SEO
 
 Frontmatter **必须**完整（缺任一字段不得进 `in_review`）：
 
@@ -80,14 +97,9 @@ description: 一两句说清失败面 + 结论（约 80～160 字，供卡片摘
 ---
 ```
 
-### 3.1 `description` 强制要求（P1 / SEO 文章层）
-
-- **必填**：不得省略；不得指望 sync 从正文「碰巧截对」  
-- **内容**：失败现象 + 可检索结论；避免口号、避免复述标题  
-- **长度**：约 80～160 汉字（或等价信息密度）；首页卡片会截断展示  
-- **样板**：`posts/mcp_tool_design_valid_but_wrong.md`、`posts/agent_write_idempotency.md`  
-- **开头**：正文前 2～3 句仍须结论先行，可与 description 呼应但不必逐字相同  
-- **互链**：文内/文末至少链到 1 篇相关已发文（仓库相对路径 `posts/….md` 即可，sync 会改成 Pages `.html`）
+- **`description` 必填**：失败现象 + 可检索结论；避免口号、避免复述标题；约 80～160 汉字  
+- **开头**：正文前 2～3 句结论先行，可与 description 呼应但不必逐字相同  
+- **互链**：文内/文末至少链到 1 篇相关已发文（仓库相对路径 `posts/….md`）
 
 ---
 
@@ -115,15 +127,14 @@ description: 一两句说清失败面 + 结论（约 80～160 字，供卡片摘
 | 角色 | 职责 | 读写 |
 | --- | --- | --- |
 | **选题 Scout** | 调研 Agent 领域新坑；写入/更新 `docs/blog-backlog.md` | 读写 backlog；只读 `posts/` |
-| **写稿 Writer** | 取一条 `ready`；按本文写 `posts/*.md`（含强制 `description`）；本地成稿 | 读写 posts + backlog 状态 |
-| **审阅 Reviewer** | 按 §7 验收；给修改意见或批准发布 | 只读 posts；写 backlog 状态与审阅记录 |
-| **协调 Coordinator** | 排期、拉通 Scout→Writer→Reviewer；**仅审过才 push**；更新 backlog→`published` | 编排；推送；不代替三人写稿/审稿 |
+| **写稿 Writer** | 取一条 `ready`；**按本文 §3 六段结构**写 `posts/*.md`（含强制 `description`）；本地成稿 | 读写 posts + backlog 状态 |
+| **审阅 Reviewer** | 按 §7 验收；Approve = ship-ready；不够深则 request changes，不软通过 | 只读 posts；写 backlog 状态与审阅记录 |
+| **协调 Coordinator** | 排期、拉通 Scout→Writer→Reviewer；**Reviewer Approve 后立即 push**（不等 Alice「批准 push」）；更新 backlog→`published`；群里留题名 + commit/PR | 编排；推送；不代替三人写稿/审稿 |
 
-用户 Alice **不必**日常进群：默认由 Coordinator 闭环。她只在改优先级、否决推送、或改规范时介入。
+**节奏：** 自动写稿日 Mon/Wed/Fri（Asia/Shanghai）；周末留给 Alice **审已推送正文**，她可手工改再提交。  
+**群聊：** 频道 `Blog Pipeline` = Scout + Writer + Reviewer + Coordinator。
 
-**群聊：** 频道 `Blog Pipeline` = Scout + Writer + Reviewer + Coordinator（同室同步，避免私聊扇出）。
-
-**发布硬规则：** Reviewer 未批准 → Coordinator 不得 push。本地改完再一次推送（偏好）。
+**发布硬规则：** Reviewer 未批准 → Coordinator 不得 push。Approve 之后 → **立即** push，不二次等人批准。
 
 ---
 
@@ -131,24 +142,27 @@ description: 一两句说清失败面 + 结论（约 80～160 字，供卡片摘
 
 - [ ] 踩坑/排查/对照，非概念贴  
 - [ ] 架构师经验之谈 + 具体失败案例  
+- [ ] **结构齐全**：现象 → 根因 → 机制/解法要点 → 同一案例错对 → 发版清单 → 小结 + 参考  
+- [ ] **案例连续**：第 4 节同一业务线；先错后对；修复点回扣第 3 节解法  
 - [ ] frontmatter 齐全：`title` / `date` / `tags` / **`description`**；路径在 `posts/`  
 - [ ] `description` 含失败面 + 结论（非口号、非复述标题）  
 - [ ] 开头 2～3 句可当 snippet；标题含可搜失败面/机制名  
 - [ ] 至少 1 条系列/相关已发文互链  
-- [ ] 含 BAD/GOOD 或 Vn 或清单  
+- [ ] 含可勾选发版清单（对准可注入失败点）  
 - [ ] 规范专名；引用可追溯  
 - [ ] 对应 backlog 条目已从 `ready` 推进  
-- [ ] 审阅通过后再推送  
+- [ ] Approve = ship-ready；通过后 Coordinator 立即 push  
 
 ---
 
 ## 8. 发布流程 (Publish)
 
-1. Writer 本地成稿于 WSL `/home/alice/workspace/homepage`  
-2. Reviewer 通过  
-3. 协调者一次 commit/push 到 `hanalice/hanalice` `main`  
-4. `blog-sync` 更新 README；backlog 标 `published`  
-5. 不提交 `.cursor/`  
+1. Writer 本地成稿于 WSL `/home/alice/workspace/homepage`（或流水线约定路径）  
+2. Reviewer 通过（Approve = ship-ready）  
+3. Coordinator **立即** commit/push 到 `hanalice/hanalice` `main`  
+4. `blog-sync` / Pages Action 更新站点；backlog 标 `published`  
+5. Alice 周末等人审已发文；有问题再手工改提交  
+6. 不提交 `.cursor/`  
 
 ---
 
@@ -159,3 +173,4 @@ description: 一两句说清失败面 + 结论（约 80～160 字，供卡片摘
 | 本文 | 写什么、怎么写、流水线、验收 |
 | `docs/blog-backlog.md` | **滚动选题**（持续变化） |
 | `github_profile_engineering.md` | 仓库/Actions/用语 §8 |
+| `posts/durable_agent_execution.md` | **结构标杆** |
