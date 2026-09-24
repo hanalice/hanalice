@@ -104,6 +104,55 @@
   - https://stacklok.com/blog/stackloks-mcp-optimizer-vs-anthropics-tool-search-tool-a-head-to-head-comparison/ — **次要**：2792 tools 上 recall/selection 鸿沟（34% vs 94%）
 - **备注：** Gate PASS ready — 新失败面已锁定为 **Host discovery-layer**。写稿禁令：不要再写 dump-all vs lazy 入门、不要复述 Confusion+Bloat 主框架、不要重画 AWS V1–V4 表。开篇一句「范文已讲 Server/`get_taxonomy`」后立刻进入 Host 五坑。P1（有生产级 Host bug + 检索对照，但非安全 P0）。
 
+
+### [ready] 2026-09-24 | P1 | silent-tool-result-truncation
+- **工作标题：** 静默截断：工具「成功返回」了半截，模型却自信答完
+- **失败面（Host / runtime tool-result fidelity 层，非 Server schema、非 discovery）：** 工具已返回完整 payload → Host/runtime 按默认 byte/token/行上限静默裁切 → 模型只见前缀/head-tail → 仍输出高置信结论；trace/APM 常记「完整返回」因为埋点在裁切前。误判「模型忽略证据 / 又一次 hallucination」
+- **为何够深（非科普）：** 主线锁 **信息保真契约**：limit 必须存在，但「drop overflow and continue」对概率推理器是错误默认——确定性解析器会炸，reasoner 会补洞。拆三层裁切（framework cap / transport buffer / display vs model view）+ observability 落在裁切错误侧 + eval 假绿。非「怎么设 context window」入门
+- **拟用案例 / 对照：**
+  1. **BAD#1 Codex in-place truncate** #14206：超 `tool_output_token_limit` 就地 head/tail + `…N tokens truncated…`，无 artifact/handle → 中段答案永久丢失；非幂等工具无法重跑补回；MCP 大 JSON/日志同症（#14466）
+  2. **BAD#2 观测错位（LatentEval）**：wrapper 记工具完整返回，runtime 再裁 → 人看完整、模型看碎片；head-tail 保括号使残缺数组仍「合法 JSON」→ 聚合/计数错但结构对
+  3. **BAD#3 旁证 description 静默截断** Claude Code #81268：tool `description`/`instructions` 客户端 2048 不可见裁切；`/mcp` 显示全文、模型收 truncated；#41593 code_executor 签名被砍后幻觉不存在函数（**次要**，划界：描述面 vs 结果面）
+  4. **BAD#4 FastMCP ResponseLimitingMiddleware** #3717：裁切后丢 `structured_content` → 带 `outputSchema` 的工具协议违规（loud 变体；对照 silent）
+  5. **GOOD：** 结构化 `result_truncated`/`original_size`/`returned_size` 字段（模型可读 + 指标可图）| 超限 **spill-to-artifact + handle**（Claude Code / Gemini CLI 文件引用路径）| 工具契约分页/`nextCursor`（模型显式续取）| harness 断言 runtime 截断 marker + 大响应 fixture（答案依赖 cap 之后证据）| per-tool truncation rate 告警
+- **领域标签：** Agent Host Runtime / Tool-Result Fidelity
+- **专题归属：** **MCP/Host Tool-Result Fidelity**（新建；与 Host Discovery 相邻但不同层——discovery=工具能否被找到；本文=找到后结果是否完整到达 reasoner）
+- **相关已发文 / 边界：**
+  - vs `mcp-progressive-disclosure`（ready）：那篇 = Catalog/search/`list_changed`/cache；本文 = **调用结果路径**上的静默丢信息
+  - vs `mcp-valid-but-wrong`：Server schema 合法错选；本文 Host 裁切导致证据不全
+  - vs `trajectory-eval-false-green`：终答假绿评估面；本文提供一类 **假绿根因**（证据在进模型前被剪）但机制层不同
+  - vs `agent-memory-poisoning`：跨会话 LTM 特权；本文单轮/同会话结果保真
+- **参考线索：**
+  - https://tianpan.co/blog/2026/05/10/silent-tool-truncation-8kb-default-agent-reasons-blind — 8KB/框架默认；reasoner vs parser 失败模式差
+  - https://latenteval.ai/research/tool-output-truncation — 七 runtime 默认 cap 表；埋点错位；marker 断言
+  - https://github.com/openai/codex/issues/14206 — auto-spill vs in-place truncate
+  - https://github.com/openai/codex/issues/14466 — MCP 已完整返回仍显示 truncated
+  - https://github.com/anthropics/claude-code/issues/81268 — description 2048 不可见截断（次要）
+  - https://github.com/PrefectHQ/fastmcp/issues/3717 — ResponseLimitingMiddleware × outputSchema
+  - https://www.anthropic.com/engineering/code-execution-with-mcp — 大结果改 code-exec 蒸馏（GOOD 形态之一）
+- **备注：** Gate PASS ready — Thu light refill。写稿禁令：不要写成 context-window 科普；开篇点名「trace 绿 / 答案错」后进 fidelity 契约。P1（生产 Host bug + 多框架对照，非安全 P0）。
+
+### [ready] 2026-09-24 | P1 | host-tool-policy-merge-after-filter
+- **工作标题：** 工具策略「滤完了」：MCP/LSP 却在过滤之后才拼进来
+- **失败面（Host tool-policy 装配层，非 OAuth aud、非 consent binding）：** 运维配了 profile / allow-deny / sandbox / owner-only / subagent 策略 → core tools 过 pipeline → **bundled MCP/LSP tools 在过滤后 append** → 同名策略本该拒绝的 MCP 工具仍进 `effectiveTools`。误判「策略配错了 / 再加一层 deny list」
+- **为何够深（非科普）：** 主线锁 **merge-after-filter 反模式**：策略正确性取决于「谁最后进集合」。修复不是再写一条 deny，而是 **final effective policy pass 覆盖全部来源**（含 compaction/re-run 路径）。与 Identity≠Audience（token 受众）、Consent Binding（浏览器会话）不同层——本文是 **本地 Host 授权装配顺序**
+- **拟用案例 / 对照：**
+  1. **BAD#1 OpenClaw** GHSA-qrp5-gfw2-gxv4：`bundleMcpRuntime?.tools` / `bundleLspRuntime?.tools` 在 core 过滤后 concat；affected `<2026.4.20`；需已配置 bundled MCP/LSP + 本应限制该工具的策略
+  2. **机制对照：** policy(core) ⊕ unfiltered(bundled) ≠ policy(core ∪ bundled)；dashboard「策略已启用」双绿掩盖装配洞
+  3. **GOOD：** `applyFinalEffectiveToolPolicy` 对合并后全集再跑 profile / provider / global·agent·group / owner-only / sandbox / subagent（fix commit `0e7a992`）；单测覆盖 allowlist、显式 deny、继承 subagent、bundle-mcp metadata
+  4. **发版清单提纲：** 枚举所有 tool 注入点（core / MCP / LSP / plugin / compaction rebuild）| 每点后是否再过同一 policy 函数 | 集成测：deny `mcp__*` 后 bundled 不可见 | 审计日志记录过滤前后集合差
+- **领域标签：** Agent Host Runtime / Tool Policy Enforcement
+- **专题归属：** **MCP/Host Tool-Policy Assembly**（新建；Host 安全装配系列；MCP-Auth 专题已收官 Identity≠Audience + Consent Binding，本篇不复述 OAuth）
+- **相关已发文 / 边界：**
+  - vs `mcp-auth-identity-not-intent` / `mcp-consent-binding-confused-deputy`：**必须划界**——那两篇 = 远程 OAuth/consent；本文 = 进程内工具名单过滤顺序
+  - vs `mcp-progressive-disclosure`：discovery/recall；本文 = 已进入 Host 的工具是否受策略约束
+  - vs `mcp-valid-but-wrong`：选错工具；本文 = 不该出现的工具仍可选
+- **参考线索：**
+  - https://github.com/openclaw/openclaw/security/advisories/GHSA-qrp5-gfw2-gxv4 — Moderate；patched 2026.4.20
+  - https://github.com/openclaw/openclaw/commit/0e7a992d3f3155199c1acc2dd9a53c5b3a4d3ada — `applyFinalEffectiveToolPolicy`
+  - https://github.com/openclaw/openclaw/issues/65612 — 次要：per-agent MCP filtering 诉求（策略应覆盖 MCP）
+- **备注：** Gate PASS ready — Thu light；单 GHSA 但机制清晰可写对照+清单。写稿禁令：不要复述 aud/consent；不要写成「如何配置 OpenClaw deny list」产品说明书。P1。
+
 ### [published] 2026-09-23 | P1 | mcp-consent-binding-confused-deputy
 - **工作标题：** MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）
 - **失败面（OAuth Proxy consent→callback 绑定层，非 aud/resource）：** 攻击者在自己浏览器完成 MCP consent → 截获上游 IdP authorize URL → 诱骗已登录且曾授权过同 IdP client 的受害者打开 → IdP 因「已授权」跳过 consent → Proxy `_handle_idp_callback` 只验 `state`+`code`、不验「发 callback 的浏览器是否刚同意过」→ 受害者 token 落到攻击者 client。误判「再加一层 OAuth / 收紧 scope / 怪 IdP 跳过 consent」
@@ -218,3 +267,4 @@
 - 2026-09-22 Scout: add ready mcp-consent-binding-confused-deputy (Tue light; FastMCP consent→callback confused deputy); PR #29
 - 2026-09-22 Scout: rebase #29 onto main after mcp-auth published.
 - 2026-09-23 Coordinator: published `mcp-consent-binding-confused-deputy` → posts/mcp_consent_binding_confused_deputy.md (Reviewer Approve → immediate push; 周末 Alice 必改).
+- 2026-09-24 Scout: Thu light refill — add ready `silent-tool-result-truncation` (Host tool-result fidelity; Codex/LatentEval/Claude-Code BADs) + ready `host-tool-policy-merge-after-filter` (OpenClaw GHSA-qrp5 merge-after-filter); skip Claw-Chain/sandbox-escape (exploit-chain heavy) and false-success arxiv (overlaps trajectory-eval).
