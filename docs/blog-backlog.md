@@ -79,7 +79,7 @@
 - **已发文：** posts/durable_agent_execution.md
 - **备注：** Reviewer approved; Alice 批准 push 2026-09-18。下一可写：等 Scout 升 ready（agent-memory-poisoning 等 idea）。
 
-### [ready] 2026-09-18 | P1 | mcp-progressive-disclosure
+### [published] 2026-09-25 | P1 | mcp-progressive-disclosure
 - **工作标题：** Host 渐进发现：工具「搜不到」≠「没这个能力」
 - **失败面（Host discovery 层，非 Server schema）：** search recall miss → 模型断定「没这个能力」；Catalog→Inspect 跳过（未 inspect 就 invoke）；mid-turn 改 `tools` 数组打断 prompt cache；search/get/invoke 元工具混淆；`notifications/tools/list_changed` 后 Host 目录陈旧
 - **为何够深（非科普）：** 范文讲 **Server 工具设计**（Confusion+Bloat、V1–V4/`get_taxonomy`）。本文推进到 **Host 运行时发现层**：lazy/Tool Search 已上线后，失败从「塞太多」变成「检索漏召回 / 缓存失活 / 元工具路由错」。对照 retrieval@k vs selection accuracy，而非再画 dump-all vs lazy 入门图
@@ -102,7 +102,8 @@
   - https://github.com/openai/codex/issues/37417 — 会话内 tool-list 变更永不生效（handler 只打日志）；Desktop 长任务旁证
   - https://github.com/zed-industries/zed/pull/42453 — Host 补 `list_changed` → reload（历史缺口对照）
   - https://stacklok.com/blog/stackloks-mcp-optimizer-vs-anthropics-tool-search-tool-a-head-to-head-comparison/ — **次要**：2792 tools 上 recall/selection 鸿沟（34% vs 94%）
-- **备注：** Gate PASS ready — 新失败面已锁定为 **Host discovery-layer**。写稿禁令：不要再写 dump-all vs lazy 入门、不要复述 Confusion+Bloat 主框架、不要重画 AWS V1–V4 表。开篇一句「范文已讲 Server/`get_taxonomy`」后立刻进入 Host 五坑。P1（有生产级 Host bug + 检索对照，但非安全 P0）。
+- **已发文：** posts/mcp_progressive_disclosure.md
+- **备注：** Reviewer approved; Coordinator auto-push 2026-09-25（新规则；六段对齐 durable_agent_execution）。系列下一坑：silent-tool-result-truncation。
 
 
 ### [ready] 2026-09-24 | P1 | silent-tool-result-truncation
@@ -118,7 +119,7 @@
 - **领域标签：** Agent Host Runtime / Tool-Result Fidelity
 - **专题归属：** **MCP/Host Tool-Result Fidelity**（新建；与 Host Discovery 相邻但不同层——discovery=工具能否被找到；本文=找到后结果是否完整到达 reasoner）
 - **相关已发文 / 边界：**
-  - vs `mcp-progressive-disclosure`（ready）：那篇 = Catalog/search/`list_changed`/cache；本文 = **调用结果路径**上的静默丢信息
+  - vs 已发文 `mcp-progressive-disclosure`：那篇 = Catalog/search/`list_changed`/cache；本文 = **调用结果路径**上的静默丢信息
   - vs `mcp-valid-but-wrong`：Server schema 合法错选；本文 Host 裁切导致证据不全
   - vs `trajectory-eval-false-green`：终答假绿评估面；本文提供一类 **假绿根因**（证据在进模型前被剪）但机制层不同
   - vs `agent-memory-poisoning`：跨会话 LTM 特权；本文单轮/同会话结果保真
@@ -268,3 +269,4 @@
 - 2026-09-22 Scout: rebase #29 onto main after mcp-auth published.
 - 2026-09-23 Coordinator: published `mcp-consent-binding-confused-deputy` → posts/mcp_consent_binding_confused_deputy.md (Reviewer Approve → immediate push; 周末 Alice 必改).
 - 2026-09-24 Scout: Thu light refill — add ready `silent-tool-result-truncation` (Host tool-result fidelity; Codex/LatentEval/Claude-Code BADs) + ready `host-tool-policy-merge-after-filter` (OpenClaw GHSA-qrp5 merge-after-filter); skip Claw-Chain/sandbox-escape (exploit-chain heavy) and false-success arxiv (overlaps trajectory-eval).
+- 2026-09-25 Coordinator: published `mcp-progressive-disclosure` → posts/mcp_progressive_disclosure.md (Reviewer Approve → immediate push; six-section durable structure).
