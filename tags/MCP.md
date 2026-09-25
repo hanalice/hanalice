@@ -1,9 +1,10 @@
 # Posts Tagged With: #MCP
 
-Total: 4 posts
+Total: 5 posts
 
 ---
 
+- [2026-09-25] [Host 渐进发现：工具「搜不到」≠「没这个能力」](../posts/mcp_progressive_disclosure.md)
 - [2026-09-23] [MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）](../posts/mcp_consent_binding_confused_deputy.md)
 - [2026-09-22] [MCP Auth：Identity ≠ Audience——OAuth 绿了，token 没绑到这台 MCP](../posts/mcp_auth_identity_not_intent.md)
 - [2026-09-16] [Agent 写操作的幂等：超时之后凭什么敢重试](../posts/agent_write_idempotency.md)
