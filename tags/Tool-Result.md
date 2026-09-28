@@ -1,11 +1,10 @@
-# Posts Tagged With: #Host
+# Posts Tagged With: #Tool-Result
 
-Total: 2 posts
+Total: 1 posts
 
 ---
 
 - [2026-09-28] [静默截断：工具「成功返回」了半截，模型却自信答完](../posts/silent_tool_result_truncation.md)
-- [2026-09-25] [Host 渐进发现：工具「搜不到」≠「没这个能力」](../posts/mcp_progressive_disclosure.md)
 
 ---
 [← Back to Home](../README.md)

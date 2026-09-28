@@ -1,9 +1,10 @@
 # Posts Tagged With: #Agent
 
-Total: 10 posts
+Total: 11 posts
 
 ---
 
+- [2026-09-28] [静默截断：工具「成功返回」了半截，模型却自信答完](../posts/silent_tool_result_truncation.md)
 - [2026-09-23] [MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）](../posts/mcp_consent_binding_confused_deputy.md)
 - [2026-09-22] [MCP Auth：Identity ≠ Audience——OAuth 绿了，token 没绑到这台 MCP](../posts/mcp_auth_identity_not_intent.md)
 - [2026-09-22] [专员互相转交都「成功」：无终止谓词的 Handoff 环](../posts/multi_agent_closed_loop_handoff.md)
