@@ -106,7 +106,7 @@
 - **备注：** Reviewer approved; Coordinator auto-push 2026-09-25（新规则；六段对齐 durable_agent_execution）。系列下一坑：silent-tool-result-truncation。
 
 
-### [ready] 2026-09-24 | P1 | silent-tool-result-truncation
+### [published] 2026-09-28 | P1 | silent-tool-result-truncation
 - **工作标题：** 静默截断：工具「成功返回」了半截，模型却自信答完
 - **失败面（Host / runtime tool-result fidelity 层，非 Server schema、非 discovery）：** 工具已返回完整 payload → Host/runtime 按默认 byte/token/行上限静默裁切 → 模型只见前缀/head-tail → 仍输出高置信结论；trace/APM 常记「完整返回」因为埋点在裁切前。误判「模型忽略证据 / 又一次 hallucination」
 - **为何够深（非科普）：** 主线锁 **信息保真契约**：limit 必须存在，但「drop overflow and continue」对概率推理器是错误默认——确定性解析器会炸，reasoner 会补洞。拆三层裁切（framework cap / transport buffer / display vs model view）+ observability 落在裁切错误侧 + eval 假绿。非「怎么设 context window」入门
@@ -131,7 +131,8 @@
   - https://github.com/anthropics/claude-code/issues/81268 — description 2048 不可见截断（次要）
   - https://github.com/PrefectHQ/fastmcp/issues/3717 — ResponseLimitingMiddleware × outputSchema
   - https://www.anthropic.com/engineering/code-execution-with-mcp — 大结果改 code-exec 蒸馏（GOOD 形态之一）
-- **备注：** Gate PASS ready — Thu light refill。写稿禁令：不要写成 context-window 科普；开篇点名「trace 绿 / 答案错」后进 fidelity 契约。P1（生产 Host bug + 多框架对照，非安全 P0）。
+- **已发文：** posts/silent_tool_result_truncation.md
+- **备注：** Reviewer approved; Coordinator auto-push 2026-09-28（新规则；六段对齐 durable；Tool-Result Fidelity）。系列下一坑：host-tool-policy-merge-after-filter。
 
 ### [ready] 2026-09-24 | P1 | host-tool-policy-merge-after-filter
 - **工作标题：** 工具策略「滤完了」：MCP/LSP 却在过滤之后才拼进来
@@ -270,3 +271,4 @@
 - 2026-09-23 Coordinator: published `mcp-consent-binding-confused-deputy` → posts/mcp_consent_binding_confused_deputy.md (Reviewer Approve → immediate push; 周末 Alice 必改).
 - 2026-09-24 Scout: Thu light refill — add ready `silent-tool-result-truncation` (Host tool-result fidelity; Codex/LatentEval/Claude-Code BADs) + ready `host-tool-policy-merge-after-filter` (OpenClaw GHSA-qrp5 merge-after-filter); skip Claw-Chain/sandbox-escape (exploit-chain heavy) and false-success arxiv (overlaps trajectory-eval).
 - 2026-09-25 Coordinator: published `mcp-progressive-disclosure` → posts/mcp_progressive_disclosure.md (Reviewer Approve → immediate push; six-section durable structure).
+- 2026-09-28 Coordinator: published `silent-tool-result-truncation` → posts/silent_tool_result_truncation.md (Reviewer Approve → immediate push; Tool-Result Fidelity).
