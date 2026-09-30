@@ -134,7 +134,7 @@
 - **已发文：** posts/silent_tool_result_truncation.md
 - **备注：** Reviewer approved; Coordinator auto-push 2026-09-28（新规则；六段对齐 durable；Tool-Result Fidelity）。系列下一坑：host-tool-policy-merge-after-filter。
 
-### [ready] 2026-09-24 | P1 | host-tool-policy-merge-after-filter
+### [published] 2026-09-30 | P1 | host-tool-policy-merge-after-filter
 - **工作标题：** 工具策略「滤完了」：MCP/LSP 却在过滤之后才拼进来
 - **失败面（Host tool-policy 装配层，非 OAuth aud、非 consent binding）：** 运维配了 profile / allow-deny / sandbox / owner-only / subagent 策略 → core tools 过 pipeline → **bundled MCP/LSP tools 在过滤后 append** → 同名策略本该拒绝的 MCP 工具仍进 `effectiveTools`。误判「策略配错了 / 再加一层 deny list」
 - **为何够深（非科普）：** 主线锁 **merge-after-filter 反模式**：策略正确性取决于「谁最后进集合」。修复不是再写一条 deny，而是 **final effective policy pass 覆盖全部来源**（含 compaction/re-run 路径）。与 Identity≠Audience（token 受众）、Consent Binding（浏览器会话）不同层——本文是 **本地 Host 授权装配顺序**
@@ -153,7 +153,8 @@
   - https://github.com/openclaw/openclaw/security/advisories/GHSA-qrp5-gfw2-gxv4 — Moderate；patched 2026.4.20
   - https://github.com/openclaw/openclaw/commit/0e7a992d3f3155199c1acc2dd9a53c5b3a4d3ada — `applyFinalEffectiveToolPolicy`
   - https://github.com/openclaw/openclaw/issues/65612 — 次要：per-agent MCP filtering 诉求（策略应覆盖 MCP）
-- **备注：** Gate PASS ready — Thu light；单 GHSA 但机制清晰可写对照+清单。写稿禁令：不要复述 aud/consent；不要写成「如何配置 OpenClaw deny list」产品说明书。P1。
+- **已发文：** posts/host_tool_policy_merge_after_filter.md
+- **备注：** Reviewer approved; Coordinator auto-push 2026-09-30（新规则；六段对齐 durable；Tool-Policy Assembly）。Ready 写后=0，需周四轻补。
 
 ### [published] 2026-09-23 | P1 | mcp-consent-binding-confused-deputy
 - **工作标题：** MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）
@@ -272,3 +273,4 @@
 - 2026-09-24 Scout: Thu light refill — add ready `silent-tool-result-truncation` (Host tool-result fidelity; Codex/LatentEval/Claude-Code BADs) + ready `host-tool-policy-merge-after-filter` (OpenClaw GHSA-qrp5 merge-after-filter); skip Claw-Chain/sandbox-escape (exploit-chain heavy) and false-success arxiv (overlaps trajectory-eval).
 - 2026-09-25 Coordinator: published `mcp-progressive-disclosure` → posts/mcp_progressive_disclosure.md (Reviewer Approve → immediate push; six-section durable structure).
 - 2026-09-28 Coordinator: published `silent-tool-result-truncation` → posts/silent_tool_result_truncation.md (Reviewer Approve → immediate push; Tool-Result Fidelity).
+- 2026-09-30 Coordinator: published `host-tool-policy-merge-after-filter` → posts/host_tool_policy_merge_after_filter.md (Reviewer Approve → immediate push; Tool-Policy Assembly).
