@@ -14,6 +14,112 @@
 
 ## Queue
 
+### [ready] 2026-10-08 | P1 | subagent-delegation-envelope
+- **工作标题：** 子代理一派生，父会话的权限没跟过去：Delegation Envelope 不是「继承」两个字
+- **失败面（Host 委派 / 子会话权限包络层，非单会话工具来源装配顺序、非 OAuth）：** 父会话 Plan 只读 / deny Bash 生效 → 经 `task` / `Agent` 工具派生子代理 → 子会话按「替换」或「全新」权限集启动（`tools` 参数替换 session 权限、deny 未传递、ACP 孙会话丢 depth / child-cap / control scope）→ 子代理执行父会话被拒的写 / Bash。反向修复把父的**全部** deny 当后代天花板 → 受限 controller 无法委派给显式授权的 executor，流水线停摆（误判「模型越狱 / 再加一条 deny」或「子代理配置写错」）
+- **为何够深（非科普）：** 主线锁 **委派时的权限代数**：`child_effective = f(parent_ceiling, child_declared)`。生产里出现过三种语义：replace（opencode #7474：`tools` 参数替换 session 权限）/ append + last-match-wins（#26597→#26700：父 deny 追加在子 allow 之后，`findLast` 让父的**自限**变成后代天花板）/ 交集 + 显式天花板（Plan 只读作为 descendant ceiling 下传，父自限不下传；Claude Code 文档：子代理声明 `bypassPermissions` 时保持主会话模式，不可借 frontmatter 升权）。再加**传递性**：孙会话必须持久化 envelope（depth、active-child cap、control scope、target-agent），否则一层修好、下一层逃逸（OpenClaw GHSA-q3jj）。不是「什么是 subagent」入门
+- **拟用案例 / 对照：**
+  1. **BAD#1 replace 语义（opencode）** #7474：`SessionPrompt.prompt()` 的 `tools` 参数**替换** session 权限、`ToolRegistry.tools()` 不按 agent 规则过滤 → 配了 `bash: {git*: allow, *: deny}` 的子代理可跑任意命令（fix PR #7473）；#26514：Plan 模式主代理 edit 被拒，经 `task` 派 `general` 子代理 edit 成功（fix PR #26597）
+  2. **BAD#2 修复回归（天花板 vs 自限未建模）** #26700：`deriveSubagentSessionPermission()` 把父**全部** deny 追加进子会话，`Permission.merge(subagent, session)` + last-match-wins → executor 自己的 `read` / `task` / `bash` allow 被父 `* deny` 覆盖，controller→executor→worker 停在 executor；#27201 只修了一部分，edit-class 仍在后续 PR 里拉锯——说明不区分「后代天花板」与「父自限」会两头出错
+  3. **BAD#3 传递性丢失（OpenClaw）** GHSA-q3jj-46pq-826r：受限 subagent 派生 ACP child session 时没有带上 depth、child-count、control scope、target-agent 这些约束；≤2026.4.21，修复版 2026.4.22 改为把 child envelope 字段持久化，并强制执行 max depth 和 active-child cap
+  4. **旁证（Claude Code）：** #25000 Task 子代理绕过 `settings.local.json` 的 Bash deny，跑了 22+ 条没有逐条审批的命令（已按 #21460 的 dup 关闭）；#27099 agent frontmatter 把 `tools:` 误写成 `allowed-tools:` 被静默忽略 → 子代理继承全部工具（次要，讲 fail-open 解析）
+  5. **GOOD：** 显式 envelope 对象 `{ceiling, self_restrictions, depth, max_children, control_scope}` 随 spawn 落盘 | `child = declared ∩ parent.ceiling`（只下传标记为 descendant 的约束）| 未知 / 拼错的 frontmatter 字段 fail-closed 或告警 | deny 规则与策略 hook 在子代理内同样生效（Claude Code 文档：deny 规则作用于主会话和子代理，hook 输入带 `agent_id`）| 子代理声明的权限不能高于父模式
+- **§4 业务线：** 同一张发版评审工单 `REL-2041`（父会话在 Plan 只读）。**BAD v1**：父会话 edit 被拒 → 派 `general` 子代理「顺手改 CHANGELOG」→ 写入成功（replace 语义；回扣 §3.1 交集代数）。**BAD v2**：修成「父 deny 全下传」后，`REL-2041` 的 controller（只有 task）→ executor（read/bash）→ worker（edit）在 executor 处因继承来的 `read * deny` 停摆（回扣 §3.2 天花板 vs 自限）。**BAD v3**：executor 为 `REL-2041` 再派 ACP 孙会话，depth / child-cap 丢失，扇出无界（回扣 §3.3 envelope 持久化）。**GOOD**：spawn 时生成 `envelope{ceiling: plan-readonly, depth≤2, max_children: 3}`，随 `REL-2041` 每一层子会话落盘；每层 effective = declared ∩ ceiling；审计日志记录每层过滤前后的工具集合差（回扣 §3.4 可观测）
+- **§5 可注入失败点：**
+  1. **注入：** 父会话 Plan / 只读，诱导模型经 `task` 派子代理执行 edit / write / 写类 bash → **期望：** 子代理工具清单里没有写工具，或调用被拒；审计记 `denied_by: parent_ceiling`
+  2. **注入：** deny-by-default 的 controller 委派给显式 allow 的 executor → **期望：** executor 保留自身 read / task / bash；父自限（`read * deny`）不下传
+  3. **注入：** 子代理再 spawn ACP / 孙会话，超 depth 或超 active-child cap；或 agent frontmatter 写未知字段 `allowed-tools:` → **期望：** spawn 被拒，或启动失败并告警；不静默回落为全量继承
+- **领域标签：** Agent Host Runtime / Subagent Delegation / Permission Inheritance
+- **专题归属：** **MCP/Host Tool-Policy Assembly**（续篇 #2：跨委派边界。#1 `host-tool-policy-merge-after-filter` 讲单会话内工具来源与 policy pass 的先后；本篇讲父→子→孙之间约束如何传递）
+- **相关已发文 / 边界：**
+  - vs `host-tool-policy-merge-after-filter`：**必须划界**——那篇 = 同一会话内 core / MCP / LSP 工具在过滤之后才拼入；本文 = 会话**之间**的约束传递语义（replace / append / intersect）+ 天花板建模 + 传递性。禁止复述 GHSA-qrp5 装配顺序
+  - vs `multi-agent-closed-loop-handoff`：那篇 = 转交路由的终止性（环 / handoff budget）；本文 = 被委派者的权限包络；depth / child-cap 只作安全上限，不讲环检测
+  - vs `mcp-auth-identity-not-intent` / `mcp-consent-binding-confused-deputy`：远程 token / consent；本文 = 本地进程内权限
+  - vs `agent-memory-poisoning`：跨会话 LTM 特权；本文 = 派生会话特权
+- **参考线索：**
+  - https://github.com/openclaw/openclaw/security/advisories/GHSA-q3jj-46pq-826r — **主证据（advisory）**；Moderate；≤2026.4.21，修复 2026.4.22（advisory 列出 fix commit `31160dc`）
+  - https://github.com/anomalyco/opencode/issues/7474 — **主证据（issue）**；`tools` 参数替换 session 权限；fix PR #7473
+  - https://github.com/anomalyco/opencode/issues/26700 — **主证据（issue）**；#26597 回归：父 deny 追加 + last-match-wins 覆盖子 allow；#27201 部分修复
+  - https://github.com/anomalyco/opencode/issues/26514 — 旁证：Plan 只读被子代理绕过；fix PR #26597
+  - https://github.com/anthropics/claude-code/issues/25000 — 旁证：子代理绕过 Bash deny（dup → #21460）
+  - https://github.com/anthropics/claude-code/issues/27099 — 次要：`allowed-tools:` 静默忽略 → 全量继承
+  - https://code.claude.com/docs/en/sub-agents — GOOD 文档：deny 规则作用于子代理；子代理声明 `bypassPermissions` 时保持主会话模式
+- **备注：** Gate PASS ready — Thu light refill 2026-10-08。**Fri 首推。** 写稿禁令：OpenClaw fix commit 只引用 advisory 原文写到的修复内容，不杜撰函数名；#27099 不复述凭据搜刮步骤，只讲「字段被静默忽略 → 全量继承」的机制；#25000 是 dup 关闭，引用时注明。P1。
+
+### [ready] 2026-10-08 | P1 | orphan-tool-call-session-wedge
+- **工作标题：** 一次中断，整个会话永久 400：tool_use / tool_result 配对不变量
+- **失败面（Host 会话转录 / conversation-state 持久化层，非结果内容保真、非 checkpoint 副作用重放）：** 用户 Esc / 关 tab / 网络断 / 语音插话打断 / 流式响应被 salvage / 并行工具结果非原子写 / compaction 窗口从 `tool_result` 起切 → 持久化历史里留下没有输出的 `function_call` / `tool_use`（或没有前驱的 `tool_result`）→ 之后每次请求都带着同一段毒历史 → Anthropic `tool_use ids were found without tool_result blocks` / OpenAI `No tool output found for function call` 400，几小时后重试照样失败；有的路径还把 400 包装成「Connection error」（误判「API 抖动 / 网络问题 / 再加 retry」）
+- **为何够深（非科普）：** 主线锁 **配对不变量必须在写入侧闭合**：provider 把 call↔output 配对当作请求合法性的硬约束，而 Host 的 interrupt / abort / salvage / compaction / 并发写入路径各自都可能只写下半对。半对一旦落进持久层（server-side conversation store / `previous_response_id` 链 / 本地 JSONL），重试就是**确定性失败**——这是毒历史，不是瞬时错误。解法分三层：(1) 失败点闭合：abort 时为每个已流出的 call 合成 output；(2) 发送前校验与修复：反向扫描双向孤儿，compaction 切点对齐配对边界；(3) 链式复用守卫：pending call 没完成就不复用 `previous_response_id`。再深一层：合成 output 的**语义诚实**——「aborted_before_exec」和「outcome_unknown」必须区分，后者要和幂等键联动，否则模型以为没执行，就会重做副作用
+- **拟用案例 / 对照：**
+  1. **BAD#1 Claude Code** 元 issue #6836：汇总 150+ 条重复报告（中断 / 网络 / hook 后 / 并行工具）；维护者回复称原因多样、很难完全消除。#45286：并发工具执行时 JSONL 非原子写，3 个 `tool_use` 只落下 2 个 `tool_result`。#6836 评论还记录了 `/compact` 窗口从 `tool_result` 起切 → `messages.0.content.0: unexpected tool_use_id`（反向孤儿）
+  2. **BAD#2 OpenAI Agents JS** #1190：streamed `run()` + `conversationId`，在 `function_call` 流出后 abort → server store 已持久化 call，SDK 的 abort 分支直接 return、不生成 output → 同一 conversation 后续 run 全部 400；修复方向：为孤儿 call 合成 `function_call_output`（issue 已关闭，关联 PR #1241）
+  3. **BAD#3 LiveKit Agents** #5092：语音用户在长工具调用期间插话 → Responses API 400，会话余下全部失败；websocket 路径把 400 包装成 `APIConnectionError`，掩盖真实错误；fix PR #5094：只在 pending tool calls 完成后才复用 `previous_response_id`
+  4. **旁证：** microsoft/amplifier #353：非 completed 的流式响应被 salvage，留下参数截断成 `{}` 的 call 和没有 output 的 call → 会话日志 14 次失败，包括 7 小时后的重试；建议丢弃不可解析的 call，并为未执行的 call 合成 error output。Azure SDK #46092：失败的 turn 以 `store=true` 持久化半对
+  5. **GOOD：** abort / interrupt / salvage 分支合成 output（status incomplete）| 发送前 invariant 校验 + 修复（双向孤儿）| compaction / trim 切点回退到配对边界 | 并行结果原子批写 | 链式复用守卫 | 合成内容区分 `aborted_before_exec` 与 `outcome_unknown`，后者带幂等键、下一轮先查状态 | 400 invalid_request 归类为不可重试的历史损坏，而不是网络错
+- **§4 业务线：** 同一退款会话 `conv_RF-7731`，模型并行发出 `lookup_order` 和 `issue_refund(call_9f2)`。**BAD v1**：用户关 tab，abort 分支直接 return，`call_9f2` 已进 server store 但没有 output → 用户回来问「好了吗」→ 400，重试全挂，只能新开会话、丢上下文（回扣 §3.1 失败点闭合）。**BAD v2**：补丁合成 `"aborted"` → 模型以为没退款，再发一次 `issue_refund` → 双退款（回扣 §3.4 语义诚实 + 幂等键）。**BAD v3**：`conv_RF-7731` 变长后 compaction 从 `lookup_order` 的 `tool_result` 起切 → 反向孤儿 400（回扣 §3.2 切点对齐）。**GOOD**：abort 时为 `call_9f2` 写入 `{status: outcome_unknown, idempotency_key: RF-7731-1}`，下一轮先 `get_refund_status(RF-7731-1)` 再决定；发送前 validator 保证双向配对；compaction 切点回退到配对边界
+- **§5 可注入失败点：**
+  1. **注入：** `function_call` 流出之后、工具执行之前 abort（取消信号 / 断连接）→ **期望：** 持久化历史中每个 call 都有 output（incomplete），下一轮请求 200
+  2. **注入：** 并行 3 个工具时丢掉一条结果写入，或让 compaction 窗口从 `tool_result` 处开始 → **期望：** 发送前 validator 检出孤儿，修复或拒绝发送；日志记 `transcript_invariant_repaired`，不进入 400 重试循环
+  3. **注入：** provider 返回 400 invalid_request 后让 retry 策略生效；被标为 `outcome_unknown` 的写工具进入下一轮 → **期望：** 归类为不可重试、不重放同一段历史；写工具先查状态再执行，不双写
+- **领域标签：** Agent Host Runtime / Conversation State / Tool-Call Protocol
+- **专题归属：** **Agent Session-State Integrity**（新建。#1 结构不变量 = 本文；#2 语义保真 = `compaction-drops-pinned-instructions`）
+- **相关已发文 / 边界：**
+  - vs `durable-agent-execution`：那篇 = 进程死后从 checkpoint 重入导致副作用重放；本文 = 会话**消息历史**结构非法导致永久 400。交点只在「合成 output 的语义诚实」一节，引用不复述
+  - vs `agent-write-idempotency`：那篇 = 超时后凭什么敢重试；本文只把幂等键当作 `outcome_unknown` 的落地手段，不重讲幂等
+  - vs `silent-tool-result-truncation`：那篇 = 结果内容被裁切但结构仍「合法」（静默）；本文 = 结构配对断裂被 provider 直接拒绝（有声，但不能自愈）
+  - vs `mcp-progressive-disclosure`：那篇 = 改 `tools` 数组破 prompt cache；本文 = `messages` 数组的配对
+- **参考线索：**
+  - https://github.com/anthropics/claude-code/issues/6836 — **主证据（issue）**；150+ 重复报告的汇总；评论含 compaction 反向孤儿复现
+  - https://github.com/openai/openai-agents-js/issues/1190 — **主证据（issue）**；abort + `conversationId` 留下孤儿 `function_call`；根因代码段与合成 output 修复方向
+  - https://github.com/livekit/agents/pull/5094 — **主证据（fix PR）**；pending tool calls 未完成时不复用 `previous_response_id`（issue #5092）
+  - https://github.com/anthropics/claude-code/issues/45286 — 旁证：并发工具执行时 JSONL 非原子写丢 `tool_result`
+  - https://github.com/livekit/agents/issues/5092 — 旁证：语音插话打断工具调用；400 被包装成连接错误
+  - https://github.com/microsoft/amplifier/issues/353 — 旁证：salvage 不完整流式响应留下未配对的 call
+  - https://github.com/Azure/azure-sdk-for-python/issues/46092 — 次要：failed turn 以 store=true 持久化半对
+- **备注：** Gate PASS ready — Thu light refill 2026-10-08。写稿禁令：#6836 评论里「1,571 sessions / 8,007 orphaned」是社区逆向统计（指向 #33949），引用必须注明非官方；不要声称 Anthropic 已彻底修复；合成 output 的 status 字段名以各 SDK 实际实现为准，正文用中性描述。P1。
+
+### [ready] 2026-10-08 | P2 | compaction-drops-pinned-instructions
+- **工作标题：** Compaction 之后 Agent 忘了「先给我看计划」：被摘要掉的不是历史，是约束
+- **失败面（Host 上下文压缩层，非 LTM 写入、非单次工具结果裁切）：** 长会话触发 auto / manual compaction → summarizer 把 AGENTS.md / CLAUDE.md 项目规则、用户最近的**条件指令**（「先修订计划给我审，再实现」）、已完成动作当普通历史一起 paraphrase → 压缩后 agent 直接实现、违反项目规则、重做已完成步骤（进度 97% 掉回 42%）（误判「模型不听话 / 指令写得不够大声 / 再加一遍 IMPORTANT」）
+- **为何够深（非科普）：** 主线锁 **约束 vs 叙事 vs 账本分层**：压缩是有损摘要，适合叙事（做过什么的大意），不适合约束（规则、条件门控、承诺），也不适合账本（已完成的副作用）。三类内容需要三种保留方式：pinned verbatim 重注入（规则源以快照形式，每个压缩边界恰好注入一次）、结构化门控状态（`awaiting_review` 这类状态不能交给摘要模型去「解释」）、外部进度账本（已完成步骤由 harness 写，不靠摘要记）。机制对照：Codex PR #29810 把 AGENTS.md 作为持久化 WorldState，初始上下文、每请求更新和 compaction 上下文同源构建，resume / fork 时指令变更只注入一次替换；Claude Code 在压缩边界有 `InstructionsLoaded`（load_reason=`compact`）和 SessionStart `compact` matcher。不是「context window 是什么」入门
+- **拟用案例 / 对照：**
+  1. **BAD#1 条件指令被压平（Claude Code）** #23776：plan-review 迭代中触发 compaction → 摘要保留了技术内容，丢掉「先审再实现」这个条件 → 压缩后直接改代码；摘要里的「Pending Tasks」反映的是模型的解读，而不是用户原话
+  2. **BAD#2 规则源被摘要（Codex）** #2927 / #5772：`/compact`（含 auto）之后 AGENTS.md 不再注入；#25792：压缩后进度从约 97% 掉到约 42%，进度汇报规则失效，已完成的工作被重开；Claude Code #24460 同症（CLAUDE.md 被一起摘要）
+  3. **BAD#3 执行账本丢失（Claude Code）** #75759：同一活跃会话内压缩后忘记已经执行过的动作 → 重做步骤（非幂等时有副作用风险）
+  4. **GOOD：** Codex PR #29810（AGENTS.md 作为持久 WorldState；compaction 上下文与请求同源；resume / fork 指令变更恰好注入一次）| Codex #46186 提案：快照 verbatim、每个压缩边界恰好恢复一次，眼下可用 SessionStart `compact` hook 重放 | Claude Code hooks：`InstructionsLoaded`（`compact`）、`PreCompact` / `PostCompact`、SessionStart `compact` matcher | 门控状态与进度账本放到 harness 外部
+- **§4 业务线：** 同一迁移任务 `MIG-318`（把 billing 表迁到新 schema；AGENTS.md 规定「禁止直连 prod DB；每阶段先出计划等审」）。**BAD v1**：第 3 轮用户说「把回滚方案改好再给我看」，这时 auto-compact → 摘要写成「下一步：实施迁移」→ agent 直接跑 `MIG-318` 迁移脚本，而且因为 AGENTS.md 被 paraphrase 掉，连的是 prod（回扣 §3.1 pinned 重注入 + §3.2 门控状态）。**BAD v2**：压缩后不记得 `MIG-318` step 2 `backfill` 已经跑过 → 再跑一遍（回扣 §3.3 外部账本）。**GOOD**：AGENTS.md 快照在压缩边界 verbatim 重注入一次；`MIG-318.state=awaiting_plan_review` 由 harness 状态机持有，压缩改不了它；`progress.jsonl` 记录 step 完成情况 + 幂等键，压缩后先读账本
+- **§5 可注入失败点：**
+  1. **注入：** 在「等待审阅」状态下强制触发 compaction（调低阈值或手动 `/compact`）→ **期望：** 下一轮不调用写工具，先输出修订后的计划；`awaiting_review` 状态不变
+  2. **注入：** compaction 之后抓取实际发给模型的 prompt；会话中途修改规则文件后再 resume → **期望：** AGENTS.md / CLAUDE.md verbatim 出现且只出现一次；规则变更后替换注入一次，不重复、不丢失
+  3. **注入：** 完成一个非幂等步骤后立刻压缩 → **期望：** agent 读外部账本跳过该步骤；即使重调也被幂等键拦截
+- **领域标签：** Agent Host Runtime / Context Management / Instruction Persistence
+- **专题归属：** **Agent Session-State Integrity**（新建系列 #2：语义保真；#1 = `orphan-tool-call-session-wedge` 结构不变量）
+- **相关已发文 / 边界：**
+  - vs `agent-memory-poisoning`：**必须划界**——那篇 = summarizer 把**不可信**内容写进 LTM 并抬权（跨会话）；本文 = summarizer 把**可信**约束降级或丢失（单会话内）。同一机制、方向相反，只用一句对照
+  - vs `silent-tool-result-truncation`：那篇 = 单次工具结果被裁；本文 = 历史整体重写后约束 / 门控丢失
+  - vs `durable-agent-execution` / `agent-write-idempotency`：重复步骤只是 BAD v2 的后果，引用幂等篇，不复述
+  - vs `long-horizon-decisive-error`：那篇讲归因方法；本文可以算「决定性错误」的一类成因，但不讲归因
+  - vs ready `orphan-tool-call-session-wedge`：同系列；那篇 = compaction 切点破坏结构；本文 = compaction 摘要丢失语义
+- **参考线索：**
+  - https://github.com/anthropics/claude-code/issues/23776 — **主证据（issue）**；条件指令「先审再实现」被压平成「实现」
+  - https://github.com/openai/codex/issues/25792 — **主证据（issue）**；压缩后 AGENTS 规则失效、进度 97%→42%
+  - https://github.com/openai/codex/pull/29810 — **主证据（fix PR，merged 2026-06-25）**；AGENTS.md 作为持久 WorldState，compaction 上下文同源，resume / fork 恰好注入一次（注：该 PR 的主要动机是 deferred executor 环境变更，compaction 同源只是其中一项，写稿时不要夸大）
+  - https://github.com/openai/codex/issues/2927 — 旁证：`/compact` 后 AGENTS.md 被忽略
+  - https://github.com/openai/codex/issues/46186 — 旁证：快照 verbatim、每个压缩边界恰好恢复一次；SessionStart `compact` hook 方案
+  - https://github.com/anthropics/claude-code/issues/24460 — 旁证：CLAUDE.md 在 `/compact` 后丢失
+  - https://github.com/anthropics/claude-code/issues/75759 — 旁证：压缩后遗忘本会话已执行的动作
+  - https://code.claude.com/docs/en/hooks — GOOD 文档：`InstructionsLoaded` load_reason `compact`、SessionStart `compact` matcher、`PreCompact` / `PostCompact`
+- **备注：** Gate PASS ready — Thu light refill 2026-10-08。写稿禁令：不要把各家压缩实现细节写成官方原理（多数只能从 issue 和文档推断）；97%→42% 是单个用户报告，引用时写「有用户报告」；不要写成「教你写 CLAUDE.md」的科普。P2（排在前两条之后）。
+
+### [idea] 2026-10-08 | P2 | mcp-sampling-server-controlled-prompt
+- **工作标题：** MCP Sampling：Server 借 Client 的模型说话
+- **失败面（MCP Client sampling 信任边界，非 tool description 投毒）：** Server 通过 `sampling/createMessage` 控制 prompt 和 `systemPrompt` 并消费补全 → 隐藏指令消耗配额 / 劫持后续对话 / 诱发隐蔽工具调用
+- **为何仍是 idea：** 目前只有 Unit 42 研究博文和第三方汇总，**缺 primary source**（advisory / fix commit / client issue）；需要找到真实 Client 实现在 sampling 审批 / 隔离上的缺陷再升 ready
+- **专题归属：** 候选 MCP 协议信任边界（与 MCP-Auth 相邻）
+- **参考线索：**
+  - https://unit42.paloaltonetworks.com/model-context-protocol-attack-vectors/ — 三类攻击向量（研究，非 primary）
+- **备注：** Scout 2026-10-08 留 idea；升级条件：≥1 条 Client 侧 advisory / issue + 修复对照。
+
 ### [published] 2026-09-15 | P0 | trajectory-eval-false-green
 - **工作标题：** Trajectory Eval：答对了为什么还是假绿
 - **失败面：** 只测 final answer，漏掉乱调工具 / 空转重试
@@ -274,3 +380,4 @@
 - 2026-09-25 Coordinator: published `mcp-progressive-disclosure` → posts/mcp_progressive_disclosure.md (Reviewer Approve → immediate push; six-section durable structure).
 - 2026-09-28 Coordinator: published `silent-tool-result-truncation` → posts/silent_tool_result_truncation.md (Reviewer Approve → immediate push; Tool-Result Fidelity).
 - 2026-09-30 Coordinator: published `host-tool-policy-merge-after-filter` → posts/host_tool_policy_merge_after_filter.md (Reviewer Approve → immediate push; Tool-Policy Assembly).
+- 2026-10-08 Scout: Thu light refill — add ready `subagent-delegation-envelope` (P1, Tool-Policy Assembly #2; OpenClaw GHSA-q3jj + opencode #7474/#26700) + `orphan-tool-call-session-wedge` (P1, new Session-State Integrity; claude-code #6836 / openai-agents-js #1190 / livekit PR #5094) + `compaction-drops-pinned-instructions` (P2, Session-State Integrity #2; claude-code #23776 / codex #25792 / codex PR #29810); add idea `mcp-sampling-server-controlled-prompt` (no primary source yet); skipped streaming partial-JSON / retry-storm / computer-use grounding (not evidence-checked this round).
