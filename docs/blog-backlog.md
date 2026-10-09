@@ -14,7 +14,7 @@
 
 ## Queue
 
-### [ready] 2026-10-08 | P1 | subagent-delegation-envelope
+### [published] 2026-10-09 | P1 | subagent-delegation-envelope
 - **工作标题：** 子代理一派生，父会话的权限没跟过去：Delegation Envelope 不是「继承」两个字
 - **失败面（Host 委派 / 子会话权限包络层，非单会话工具来源装配顺序、非 OAuth）：** 父会话 Plan 只读 / deny Bash 生效 → 经 `task` / `Agent` 工具派生子代理 → 子会话按「替换」或「全新」权限集启动（`tools` 参数替换 session 权限、deny 未传递、ACP 孙会话丢 depth / child-cap / control scope）→ 子代理执行父会话被拒的写 / Bash。反向修复把父的**全部** deny 当后代天花板 → 受限 controller 无法委派给显式授权的 executor，流水线停摆（误判「模型越狱 / 再加一条 deny」或「子代理配置写错」）
 - **为何够深（非科普）：** 主线锁 **委派时的权限代数**：`child_effective = f(parent_ceiling, child_declared)`。生产里出现过三种语义：replace（opencode #7474：`tools` 参数替换 session 权限）/ append + last-match-wins（#26597→#26700：父 deny 追加在子 allow 之后，`findLast` 让父的**自限**变成后代天花板）/ 交集 + 显式天花板（Plan 只读作为 descendant ceiling 下传，父自限不下传；Claude Code 文档：子代理声明 `bypassPermissions` 时保持主会话模式，不可借 frontmatter 升权）。再加**传递性**：孙会话必须持久化 envelope（depth、active-child cap、control scope、target-agent），否则一层修好、下一层逃逸（OpenClaw GHSA-q3jj）。不是「什么是 subagent」入门
@@ -45,6 +45,8 @@
   - https://github.com/anthropics/claude-code/issues/27099 — 次要：`allowed-tools:` 静默忽略 → 全量继承
   - https://code.claude.com/docs/en/sub-agents — GOOD 文档：deny 规则作用于子代理；子代理声明 `bypassPermissions` 时保持主会话模式
 - **备注：** Gate PASS ready — Thu light refill 2026-10-08。**Fri 首推。** 写稿禁令：OpenClaw fix commit 只引用 advisory 原文写到的修复内容，不杜撰函数名；#27099 不复述凭据搜刮步骤，只讲「字段被静默忽略 → 全量继承」的机制；#25000 是 dup 关闭，引用时注明。P1。
+- **已发文：** posts/subagent_delegation_envelope.md
+- **发布备注：** Reviewer approved; Coordinator auto-push 2026-10-09（六段对齐 durable；Tool-Policy Assembly #2）。Writer 核源与本条目不一致的 4 处（#7474 not planned / #7473 未合；#27201 部分修复；Claude Code Plan 模式下子代理按自身声明模式运行、非天花板；hook 输入 `agent_id` 无文档依据）以正文为准，Scout 周二 PR 更正条目。
 
 ### [ready] 2026-10-08 | P1 | orphan-tool-call-session-wedge
 - **工作标题：** 一次中断，整个会话永久 400：tool_use / tool_result 配对不变量
@@ -381,3 +383,4 @@
 - 2026-09-28 Coordinator: published `silent-tool-result-truncation` → posts/silent_tool_result_truncation.md (Reviewer Approve → immediate push; Tool-Result Fidelity).
 - 2026-09-30 Coordinator: published `host-tool-policy-merge-after-filter` → posts/host_tool_policy_merge_after_filter.md (Reviewer Approve → immediate push; Tool-Policy Assembly).
 - 2026-10-08 Scout: Thu light refill — add ready `subagent-delegation-envelope` (P1, Tool-Policy Assembly #2; OpenClaw GHSA-q3jj + opencode #7474/#26700) + `orphan-tool-call-session-wedge` (P1, new Session-State Integrity; claude-code #6836 / openai-agents-js #1190 / livekit PR #5094) + `compaction-drops-pinned-instructions` (P2, Session-State Integrity #2; claude-code #23776 / codex #25792 / codex PR #29810); add idea `mcp-sampling-server-controlled-prompt` (no primary source yet); skipped streaming partial-JSON / retry-storm / computer-use grounding (not evidence-checked this round).
+- 2026-10-09 Coordinator: published `subagent-delegation-envelope` → posts/subagent_delegation_envelope.md (Reviewer Approve → immediate push; Tool-Policy Assembly #2).
