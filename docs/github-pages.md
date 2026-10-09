@@ -53,6 +53,12 @@ One-time GitHub setup:
 
 GoatCounter’s script ignores `localhost`, so `python3 -m http.server -d public` will not inflate production counts. Local `make sync` also skips the counter snippet unless `GOATCOUNTER_CODE` is in the environment.
 
+## Comments (Giscus)
+
+Post pages embed [Giscus](https://giscus.app). Each article maps to one Discussion in the **Announcements** category of `hanalice/hanalice` (only maintainers and the Giscus app can open a new thread; visitors comment and react). Discussions are already enabled on the repo.
+
+One-time: install the [Giscus GitHub App](https://github.com/apps/giscus) on this repository (Discussions: Read and write). Until that install exists, the comment box on the site stays empty. Re-run **Deploy GitHub Pages** after the widget lands in `scripts/sync.py`.
+
 ## Follow-up workflow example
 
 If you need a reference copy of the sync Action: `docs/blog-sync.yml.example`.
