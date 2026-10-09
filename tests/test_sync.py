@@ -498,6 +498,24 @@ class TestRewritePostMdLinks(unittest.TestCase):
         self.assertIn('posts/other_post.html', html_out)
         self.assertNotIn('posts/other_post.md', html_out)
 
+    def test_render_post_includes_giscus(self):
+        post = {
+            'title': 'T',
+            'date': '2026-01-01',
+            'tags': ['Git'],
+            'description': 'desc',
+            'body': 'Hello.\n',
+            'basename': 't',
+            'path': './posts/t.md',
+        }
+        html_out = sync._render_post(post)
+        self.assertIn('https://giscus.app/client.js', html_out)
+        self.assertIn('data-repo="hanalice/hanalice"', html_out)
+        self.assertIn(f'data-category-id="{sync.GISCUS_CATEGORY_ID}"', html_out)
+        self.assertIn('data-mapping="pathname"', html_out)
+        index = sync._render_index([post], {'Git': 1})
+        self.assertNotIn('giscus.app', index)
+
 
 class TestIndexTagPolish(unittest.TestCase):
 
