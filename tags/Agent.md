@@ -1,9 +1,10 @@
 # Posts Tagged With: #Agent
 
-Total: 14 posts
+Total: 15 posts
 
 ---
 
+- [2026-10-14] [一个 429 打出成倍的上游请求：Agent 重试叠在 SDK 自动重试上，调用链没有唯一 retry owner](../posts/layered_retry_amplification.md)
 - [2026-10-12] [一次中断，整个会话永久 400：tool_use / tool_result 配对不变量要在写入侧闭合](../posts/orphan_tool_call_session_wedge.md)
 - [2026-10-09] [子代理一派生，父会话的权限没跟过去：Delegation Envelope 不是「继承」两个字](../posts/subagent_delegation_envelope.md)
 - [2026-09-30] [工具策略「滤完了」：MCP/LSP 却在过滤之后才拼进来](../posts/host_tool_policy_merge_after_filter.md)
