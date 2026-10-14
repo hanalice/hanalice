@@ -119,7 +119,7 @@
   - https://code.claude.com/docs/en/hooks — GOOD 文档：SessionStart `compact` matcher、`PreCompact` / `PostCompact`、`InstructionsLoaded` load_reason `compact`（无 decision control，仅观测；Claude 经「Project instructions」设置直接读 `AGENTS.md` 时不触发）
 - **备注：** Gate PASS ready — Thu light refill 2026-10-08。写稿禁令：不要把各家压缩实现细节写成官方原理（多数只能从 issue 和文档推断）；97%→42% 是单个用户报告，引用时写「有用户报告」；不要写成「教你写 CLAUDE.md」的科普。P2（排在前两条之后）。**Sat 2026-10-10 严格复核：PASS 保持 ready**——主证据中 PR #29810 已合（2026-06-25）；#25792 open；#23776 实为 dup 关闭（→ #14941 not planned），GitHub 显示的 completed 不代表修复。已在正文对应处更正：#2927 / #5772 是 stale 关闭、#24460 是不活跃关闭、#46186 的 hook 方案是社区评论、`InstructionsLoaded` 只能观测不能重注入。新增写稿禁令：97%→42% 是模型**自报**的进度数（#25792 下有 contributor 质疑其意义），只能当症状，不能当量化证据；不要说 Claude Code / Codex「已修复」压缩丢约束。
 
-### [ready] 2026-10-10 | P1 | layered-retry-amplification
+### [published] 2026-10-14 | P1 | layered-retry-amplification
 - **工作标题：** 一个 429 打出 12 个请求：Agent 的重试没有唯一 owner
 - **失败面（Provider client / Agent loop 重试策略层，非幂等重放、非 handoff 环）：** Agent 外层 loop 已有重试（尊重 `Retry-After`、有 backoff）→ 底下的 provider SDK 客户端用默认 `max_retries` 再静默重试一遍（自带短 backoff）→ 一次 429 被放大成「外层次数 × 内层次数」个上游请求，全部打在同一个限流桶上；终态错误（如 `403 ai_credits_limit_exceeded`）也被内层重复打；外层把 `Retry-After` 截到比真实 reset 窗口还短 → 提前重试再次触发限流 → Agent 看起来挂住（误判「provider 抖动 / 把 retry 次数调大 / 加并发」）
 - **为何够深（非科普）：** 主线锁 **重试所有权 + 错误分类**：(1) 放大是乘法，不是加法：每层各自「合理」的 1+N 次相乘；nanobot 在恒返回 429 的 mock 端点上实测外层 1+3 次叠加 SDK 默认重试 = 12 个请求，关掉 SDK 重试后 = 4 个（3.0x）。(2) 两层 backoff 语义不同：外层按 `Retry-After` 等，内层按自己的短 backoff 打，消耗的是同一个令牌桶；外层 `Retry-After` cap 低于 reset 窗口时，「尊重 Retry-After」形同虚设。(3) 分类缺失：429 至少有 WAIT（等）/ CAP（降并发）/ STOP（额度耗尽，不重试）三种语义（nanobot #2760 讨论），终态错误不该进任何一层重试。修法不是「调小次数」，而是**每条调用链只有一个 retry owner** + owner 处做错误分类 + 跨层共享的 retry budget。「唯一 owner」也不等于「处处设 0」：hermes 修复刻意保留了不被外层 loop 包裹的 `auxiliary_client` 的 SDK 重试。不是「指数退避 + jitter」入门
@@ -147,6 +147,8 @@
   - https://github.com/HKUDS/nanobot/issues/2760 — 旁证（closed completed）：429 WAIT / CAP / STOP 分类讨论
   - https://github.com/NousResearch/hermes-agent/issues/26293 — 旁证（closed completed，经 PR #53918）：根因报告，含 Tier-1 约 171s reset
 - **备注：** Gate PASS ready — Sat round 2026-10-10（Alice 触发）。写稿禁令：「SDK 内层 backoff 忽略 `Retry-After`」是 hermes issue / PR 的原话，只能写成「该项目当时的版本里」，不要写成各 SDK 的普遍事实；12→4 是 nanobot 在 mock 429 端点上的实测，不是生产数据；约 171s 是报告者账户的观测值，不是官方限额；gh-aw 合入代码的注释写「limit … to 1」而赋值是 `"0"`，评审回复又说 lock 文件里是 1——**正文不要引用具体数值**，只写「agent 阶段关闭或限制 SDK 内层重试，detection 路径保留默认」；§4 不要编具体请求数 / 时长，写成相对量；不写成「指数退避 + jitter」科普。P1。
+- **已发文：** posts/layered_retry_amplification.md
+- **发布备注：** Reviewer approved; Coordinator auto-push 2026-10-14（六段对齐 durable；Agent Runtime Failure Handling #1）。Writer 核源与本条目不一致的 4 处（gh-aw #47237 未新增 harness 匹配模式、仅加 3 个回归测试；nanobot #2760 WAIT/CAP/STOP 拆分出自社区评论者；#2759 无 Azure 在 review 中加入的证据；hermes 120s 上限改在 `agent/conversation_loop.py`，#47217 为自动生成报告）以正文为准，Scout 10/14 更正 PR 处理。
 
 ### [ready] 2026-10-10 | P2 | streaming-tool-call-index-collision
 - **工作标题：** 两个并行工具调用拼成一个 `{"path":"a.rs"}{"path":"b.rs"}`：流式 tool_call 组装的身份键坍缩
@@ -452,3 +454,4 @@
 - 2026-10-09 Coordinator: published `subagent-delegation-envelope` → posts/subagent_delegation_envelope.md (Reviewer Approve → immediate push; Tool-Policy Assembly #2).
 - 2026-10-10 Scout: Sat round (Alice 触发) — add ready `layered-retry-amplification` (P1, new Agent Runtime Failure Handling #1; nanobot PR #2759 / hermes-agent PR #53918 / gh-aw PR #47237, all merged) + `streaming-tool-call-index-collision` (P2, Session-State Integrity #3; openai-python PR #3425 / litellm PR #21337 / unsloth PR #10059, all merged); correct subagent-delegation-envelope (4 处: #7474 not planned + #7473 unmerged; #26597 regression + #27201 partial; Claude Code plan mode ≠ ceiling; `agent_id` claim removed — mis-attributed to sub-agents doc, actually in hooks doc); re-verify orphan-tool-call-session-wedge + compaction-drops-pinned-instructions (both PASS, close reasons / merge states annotated); skip computer-use grounding / structured-output schema drift / eval grader drift (not evidence-checked to primary-source level this round); keep mcp-sampling as idea.
 - 2026-10-12 Coordinator: published `orphan-tool-call-session-wedge` → posts/orphan_tool_call_session_wedge.md (Reviewer Approve → immediate push; Session-State Integrity #1).
+- 2026-10-14 Coordinator: published `layered-retry-amplification` → posts/layered_retry_amplification.md (Reviewer Approve → immediate push; Runtime Failure Handling #1).
