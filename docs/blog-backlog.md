@@ -86,7 +86,9 @@
 - **已发文：** posts/orphan_tool_call_session_wedge.md
 - **发布备注：** Reviewer approved; Coordinator auto-push 2026-10-12（六段对齐 durable；Agent Session-State Integrity #1）。Writer 核源与本条目不一致的 3 处（#45286 duplicate → #31328 not planned，未写成已修；Azure #46092 原报告是配对完整却被拒，未引用；Anthropic 错误原文改引 #6836 中的报错）以正文为准，Scout 周二 PR 更正条目。
 
-### [ready] 2026-10-08 | P2 | compaction-drops-pinned-instructions
+### [published] 2026-10-16 | P2 | compaction-drops-pinned-instructions
+
+- **发布备注（2026-10-16）：** Reviewer Approve 后发布为 `posts/compaction_drops_pinned_instructions.md`（Session-State Integrity #2）。正文按原始来源写：#28736 仅写报告人感谢修复、未找到关联 PR；#75759「重复执行」标为推断；#14941 引用的是第二句 continuation 提示。
 - **工作标题：** Compaction 之后 Agent 忘了「先给我看计划」：被摘要掉的不是历史，是约束
 - **失败面（Host 上下文压缩层，非 LTM 写入、非单次工具结果裁切）：** 长会话触发 auto / manual compaction → summarizer 把 AGENTS.md / CLAUDE.md 项目规则、用户最近的**条件指令**（「先修订计划给我审，再实现」）、已完成动作当普通历史一起 paraphrase → 压缩后 agent 直接实现、违反项目规则、重做已完成步骤（进度 97% 掉回 42%）（误判「模型不听话 / 指令写得不够大声 / 再加一遍 IMPORTANT」）
 - **为何够深（非科普）：** 主线锁 **约束 vs 叙事 vs 账本分层**：压缩是有损摘要，适合叙事（做过什么的大意），不适合约束（规则、条件门控、承诺），也不适合账本（已完成的副作用）。三类内容需要三种保留方式：pinned verbatim 重注入（规则源以快照形式，每个压缩边界恰好注入一次）、结构化门控状态（`awaiting_review` 这类状态不能交给摘要模型去「解释」）、外部进度账本（已完成步骤由 harness 写，不靠摘要记）。机制对照：Codex PR #29810 把 AGENTS.md 作为持久化 WorldState，初始上下文、每请求更新和 compaction 上下文同源构建，resume / fork 时指令变更只注入一次替换；Claude Code 在压缩边界有 `InstructionsLoaded`（load_reason=`compact`）和 SessionStart `compact` matcher。不是「context window 是什么」入门
