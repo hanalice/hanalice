@@ -5,7 +5,7 @@
 # Hi, I'm Hanalice
 **Apple-Style Minimalist Developer | Minimalist Geek**
 
-<sub>Repo views: 369 · Site views: 27</sub>
+<sub>Repo views: 369 · Site views: 29</sub>
 
 </div>
 
@@ -23,7 +23,7 @@
 - [2026-09-28] [静默截断：工具「成功返回」了半截，模型却自信答完](./posts/silent_tool_result_truncation.md)
 - [2026-09-25] [Host 渐进发现：工具「搜不到」≠「没这个能力」](./posts/mcp_progressive_disclosure.md)
 - [2026-09-23] [MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）](./posts/mcp_consent_binding_confused_deputy.md)
-- [2026-09-22] [MCP Auth：Identity ≠ Audience——OAuth 绿了，token 没绑到这台 MCP](./posts/mcp_auth_identity_not_intent.md)
+- [2026-09-22] [专员互相转交都「成功」：无终止谓词的 Handoff 环](./posts/multi_agent_closed_loop_handoff.md)
 <!-- BLOG-POST-LIST:END -->
 
 ---
@@ -38,4 +38,4 @@
   <a href="./posts">All Posts →</a>
 </p>
 
-<!-- STATUS: HEALTHY, LAST_SYNC: 2026-10-19 06:07:43 -->
+<!-- STATUS: HEALTHY, LAST_SYNC: 2026-10-20 05:58:27 -->
