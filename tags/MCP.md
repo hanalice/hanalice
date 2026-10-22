@@ -1,9 +1,10 @@
 # Posts Tagged With: #MCP
 
-Total: 6 posts
+Total: 7 posts
 
 ---
 
+- [2026-10-22] [MCP Server 实例复用：一个 McpServer 连两个客户端，响应、elicitation 与通知各按自己的条件发错地方](../posts/mcp_server_instance_reuse_cross_client_leak.md)
 - [2026-09-30] [工具策略「滤完了」：MCP/LSP 却在过滤之后才拼进来](../posts/host_tool_policy_merge_after_filter.md)
 - [2026-09-25] [Host 渐进发现：工具「搜不到」≠「没这个能力」](../posts/mcp_progressive_disclosure.md)
 - [2026-09-23] [MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）](../posts/mcp_consent_binding_confused_deputy.md)
