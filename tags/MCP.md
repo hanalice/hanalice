@@ -1,9 +1,10 @@
 # Posts Tagged With: #MCP
 
-Total: 7 posts
+Total: 8 posts
 
 ---
 
+- [2026-10-23] [客户端超时了，工具还在跑：MCP 取消没过线，迟到的取消又把连接打断](../posts/mcp_cancellation_not_propagated.md)
 - [2026-10-22] [MCP Server 实例复用：一个 McpServer 连两个客户端，响应、elicitation 与通知各按自己的条件发错地方](../posts/mcp_server_instance_reuse_cross_client_leak.md)
 - [2026-09-30] [工具策略「滤完了」：MCP/LSP 却在过滤之后才拼进来](../posts/host_tool_policy_merge_after_filter.md)
 - [2026-09-25] [Host 渐进发现：工具「搜不到」≠「没这个能力」](../posts/mcp_progressive_disclosure.md)
