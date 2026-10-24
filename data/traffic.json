@@ -195,13 +195,17 @@
       "2026-10-21": {
         "count": 3,
         "uniques": 1
+      },
+      "2026-10-22": {
+        "count": 0,
+        "uniques": 0
       }
     },
-    "updated_at": "2026-10-23T05:59:47Z"
+    "updated_at": "2026-10-24T05:46:07Z"
   },
   "site": {
     "count": 30,
     "count_unique": 30,
-    "updated_at": "2026-10-23T05:59:48Z"
+    "updated_at": "2026-10-24T05:46:07Z"
   }
 }
