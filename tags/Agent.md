@@ -1,9 +1,10 @@
 # Posts Tagged With: #Agent
 
-Total: 19 posts
+Total: 20 posts
 
 ---
 
+- [2026-10-26] [换了个模型，会话就 400 了：tool call id 在跨 provider 重放时被改写](../posts/tool_call_id_rewrite_cross_provider.md)
 - [2026-10-23] [客户端超时了，工具还在跑：MCP 取消没过线，迟到的取消又把连接打断](../posts/mcp_cancellation_not_propagated.md)
 - [2026-10-22] [MCP Server 实例复用：一个 McpServer 连两个客户端，响应、elicitation 与通知各按自己的条件发错地方](../posts/mcp_server_instance_reuse_cross_client_leak.md)
 - [2026-10-19] [流式 tool call 的身份键坍缩：并行调用被拼成一个坏 call，在进历史之前就已经坏了](../posts/streaming_tool_call_index_collision.md)
