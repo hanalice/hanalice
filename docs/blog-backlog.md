@@ -323,6 +323,66 @@
   - 源码（Scout 2026-10-22 读）：TS `1.32.1` tag 与 `v1.x` 分支 `src/client/index.ts`（`if (result.structuredContent) {`）、`src/server/mcp.ts`（`if (result.isError) { return; }`）；TS `main` `packages/client/src/client/client.ts`（`result.structuredContent !== undefined && !result.isError`）；Python `v1.x` `src/mcp/server/lowlevel/server.py`、`src/mcp/server/fastmcp/utilities/func_metadata.py`、`src/mcp/client/session.py`（`if not result.isError:` 才校验）；Python `main` `src/mcp/server/mcpserver/utilities/func_metadata.py`（`not result.is_error`）
 - **备注：** Gate PASS ready — Thu 2026-10-22 refill（逐条读 issue / PR 正文、评论、API 状态与 labels，并对照两个 SDK 的 tag / 分支源码）。写稿禁令：不要写「MCP 客户端都会这样」——Python v1.x 客户端和 TS v2 主线客户端都对 `isError` 跳过校验，问题限定在 TS v1.x 客户端（1.32.1 / v1.x 分支头）与 Python v1.x 服务端；「模型重试 8 次」出自 #2748 的社区评论（ynohat，非维护者），不当复现数据；#1428 的关闭理由（评审认为有 `structuredContent` 就应校验）是 #2748 正文与评论转述的，本轮未读 #1428 讨论原文，引用时写「据 #2748 所述」；规范没有规定错误结果能不能带 `structuredContent`（#2748 提到 SEP-2145 仍 open，本轮未核），不要写成规范禁止或允许；「校验失败降级为模型可见的 tool error」「validator 在发请求时取快照」分别是本文主张和 #2612 的提议，不是任何 SDK 的现有行为；Python v2 主线的 `not result.is_error` 守卫是哪个 commit 加的未核，只写「主线现已带该守卫」，并且 #2466 仍 open；#2429 评论区另一位评论者说 Python 客户端 `session.py` 不检查 `is_error`——v1.x 分支头源码显示会检查，不要引用这一句；#2748 里「`@modelcontextprotocol/client@2.0.0` 已带守卫」是报告者说法，本轮只核到 `main` 当前源码；§4 的 `AP-7302` 是设计示例。P2。
 
+### [ready] 2026-10-27 | P1 | mcp-progress-same-chunk-unknown-token
+- **工作标题：** 进度通知和结果同一包到了：客户端先删 handler，再把「未知 token」当成断连
+- **失败面（MCP 客户端协议分发层 / progress handler 生命周期，非取消语义、非连接实例复用、非工具结果校验）：** Server 在返回 `tools/call` 结果之前（甚至同一 stdio 读缓冲里）写出 `notifications/progress` → Client 的 `_onresponse` **同步**删掉 `_progressHandlers`，而 `_onnotification` 把 progress **推到 microtask** 才跑 → 后到的（其实先写出的）progress 找不到 handler → `Received a progress notification for an unknown token: …` 进 `onerror`。Host 侧（Claude Code）再把这条协议错误当成 stdio transport 故障，打出 `STDIO connection dropped` / `Closing transport`，重连；同连接上其它在途 `tools/call` 被截断或丢参数（误判「MCP server 不稳 / 进度实现写错 / 网络抖」）
+- **为何够深（非科普）：** 主线锁 **「wire 顺序 ≠ 客户端处理顺序」**：问题不是 server 违规迟到，而是客户端自己把同一次 read 里的通知排到响应之后。三层可拆：(1) **同 chunk 重排**：通知走 microtask、响应当场删 handler → 终端 `progress===total` 在 wire 上先于 result，却在客户端变成「未知 token」（#2580 + #2967 评论复现表：1.29.0 上 50 次调用里 43 次 `received=1`+3 errors）；(2) **真迟到**：响应处理完之后才到的 progress 仍应静默忽略，而不是 `onerror`（#2586 的 recently-completed FIFO）；(3) **Host 过激反应**：把未知 token 当成 transport 致命错误 → 断 stdio / 截断在途调用（Claude Code #102831 有线抓包；#64475 报告大参数 `body: expected string, received undefined`）。GOOD 对照：#2967 把 handler 删除推迟一个 microtask（同 tick 通知先送达）；#2586 对刚完成的 token 静默丢弃；Host 对未知 progress token 只 debug、不断连。不是「怎么发 progress」入门
+- **拟用案例 / 对照：**
+  1. **BAD#1 SDK 同 chunk 重排（TS SDK）** #2580（open，`bug` / `ready for work` / `P2` / `v1`+`v2`）：server 连发 N 条 progress 再回 result；客户端 `onerror` 刷 `Received a progress notification for an unknown token`；1.29.0 stdio 复现。#2967（open，base `main`，**未合**）评论给出 50 次统计与 deferred-delete 修复；报告者在真实 apple-photos-mcp `export` 上：基线 9/15 丢终端通知，#2967 预览 10/10 送达且零 `onerror`
+  2. **BAD#2 Host 把未知 token 当断连（Claude Code）** #102831（open，`has repro`）：极简 Python stdio server，progress **紧挨** result 写出 → 每次 `STDIO connection dropped` + unknown token，工具仍显示成功；progress 提前 3s 则不触发。#64475（closed **not_planned**，stale bot，**未修复**）同日志下报告在途大字段被截成 `body: expected string, received undefined`；对照：同 SDK 独立客户端与 HTTP 直连均稳定
+  3. **BAD#3 真迟到仍打协议错误（与 #2967 正交）** #2580 与 #2586（open，base `v1.x`，**未合**）：响应之后到达的同 token progress 仍走 `_onerror`；#2967 PR 正文写明它**不**覆盖真迟到，需 #2586 的 recently-completed 集合
+  4. **旁证：** #47765（closed `duplicate` → #47378）正文是 progress unknown-token 断连，但 bot 指向的 #47378 是「成功后 2–5s 杀 stdin」另一症状（closed not_planned）——引用时写清 bot-dup 目标与正文不符，不以 #47378 当本坑修复追踪
+  5. **GOOD：** 同 tick 内先派发已排队的 progress，再删 handler（#2967）| 刚完成 token 的迟到 progress 静默/debug，真未知仍报错（#2586）| Host 对未知 progress token 不断 transport、不中断其它在途调用 | 不以终端 progress 做完成闸门（完成以 result 为准）| 指标：unknown-token `onerror` 计数 vs 成功 `tools/call` 计数
+- **§4 业务线：** 同一批影像导出任务 `EXPORT-8841`：MCP 工具 `export_album` 每张图发一条 progress，最后一条 `progress===total` 后立刻返回结果。**BAD v1**：Host 用 TS SDK 1.29.x，stdio 同一 read 里 progress+result → 终端进度进 `onerror`，UI 以为失败重试，server 端已写出文件（回扣 §3.1）。**BAD v2**：Claude Code 把未知 token 记成 connection dropped 并重连，同会话下一条带长 `body` 的 `tools/call` 被截断，server Zod 报 `body: expected string, received undefined`（回扣 §3.3）。**GOOD**：SDK 同 tick 先派发 progress；迟到 token 静默；Host 未知 token 只打 debug；`EXPORT-8841` 以 result 为完成信号，进度条允许丢最后一帧（回扣 §3.1–§3.3）
+- **§5 可注入失败点：**
+  1. **注入：** 无延迟地把 N 条 progress 与 result 塞进同一次 transport 派发 → **期望：** `onprogress` 收到全部 N 条；`onerror` 无 unknown-token；请求正常完成
+  2. **注入：** result 处理后再发同 token 的 progress → **期望：** 不进 `onerror`（或仅 debug）；连接保持
+  3. **注入：** Host 路径上紧挨 progress+result 的长工具，随后立刻发第二条大参数 `tools/call` → **期望：** 无 `STDIO connection dropped`；第二条参数完整到达 server
+- **领域标签：** MCP Client Protocol Dispatch / Progress Notifications / Stdio Transport
+- **专题归属：** **Agent Runtime Failure Handling**（续篇 #3：#1 `layered-retry-amplification` = 失败后谁重试；#2 `mcp-cancellation-not-propagated` = 放弃后对端是否停下；本篇 = 成功路径上通知与响应的分发顺序把「正常进度」打成协议错误 / 断连）
+- **相关已发文 / 边界：**
+  - vs `mcp-cancellation-not-propagated`：那篇 = 取消通知是否发出/应答；本文 = 进度通知与成功响应的顺序。交点只有「未知 id/token → 断连」一句互链
+  - vs `mcp-server-instance-reuse-cross-client-leak`：那篇 = 多客户端共享实例错路由；本文 = 单连接内 handler 生命周期
+  - vs `silent-tool-result-truncation` / `mcp-output-schema-validation-swallows-tool-errors`：那两篇是结果内容被裁/换；本文结果往往已成功，坏在旁路通知
+  - vs `streaming-tool-call-index-collision`：那篇是 LLM 流式 tool_call 组装；本文是 MCP JSON-RPC 通知分发
+- **参考线索：**
+  - https://github.com/modelcontextprotocol/typescript-sdk/issues/2580 — **主证据（issue，open）**；unknown-token `onerror`；同 chunk 机制在评论中被钉死
+  - https://github.com/modelcontextprotocol/typescript-sdk/pull/2967 — **主证据（fix PR，open，base `main`，未合）**；deferred delete；50 次复现表与真实 server 验证
+  - https://github.com/anthropics/claude-code/issues/102831 — **主证据（issue，open）**；线抓包：progress 紧挨 result → connection dropped
+  - https://github.com/modelcontextprotocol/typescript-sdk/pull/2586 — 旁证（open，base `v1.x`，未合）：recently-completed FIFO
+  - https://github.com/anthropics/claude-code/issues/64475 — 旁证（closed not_planned，stale，未修复）：断连截断在途大参数
+  - https://github.com/anthropics/claude-code/issues/47765 — 旁证（closed duplicate→#47378；正文与 #47378 症状不一致，引用须注明）
+- **备注：** Gate PASS ready — Tue 2026-10-27 refill（读 #2580 正文+评论、#2967/#2586 PR 状态、#102831/#64475/#47765）。写稿禁令：不要写「SDK 已修复」——#2967/#2586 均未合；不要把 #47378 当本坑主线；#64475 的参数截断是报告者假设+日志相关，独立 MCP 客户端对照证明非 server bug，但 Claude Code 源码未开源核到具体 if；apple-photos 数字是报告者负载测试；「终端 progress 不可做完成闸门」是本文主张。P1。
+
+### [ready] 2026-10-27 | P1 | tool-approval-cross-run-transfer
+- **工作标题：** 上次点过同意，这次没问就执行了：审批记录只绑 call_id，不绑 run
+- **失败面（Agent Host HITL / RunState 审批键空间，非 MCP OAuth consent、非子代理权限包络、非工具结果截断）：** 带 `needs_approval=True` 的工具在 Run 1 打断 → 人审批 → 执行；Run 2（新 run、常复用同一 `Agent` 实例）模型又发出**相同** `call_id` + 相同参数 → 应用把 Run 1 的 `ToolApprovalItem` 塞进 `state2.approve(...)` → `_approval_items_match` 只比 `(agent, invocation type, call_id, arguments fingerprint)`，**没有 run 谱系** → 受保护工具再次执行，本 run 无人点同意。旁路：(a) 并行工具批次里兄弟调用的 guardrail 炸掉时，已完成的副作用调用从 Session 消失，下一轮模型重做（#5327）；(b) 恢复审批回合上 output guardrail 绊倒时，streamed 路径留下无 output 的 orphan `function_call`（#4125）（误判「模型乱调 / Session 坏了 / 用户点过所以安全」）
+- **为何够深（非科普）：** 主线锁 **审批是「对哪一次执行承诺」的能力，不是「对这个 call_id 形状的永久通行证」**。四点：(1) **谱系**：批准必须绑定 issuing run（或 execution generation），跨 run 重放 `ToolApprovalItem` 应拒绝（#5413；多人在 `main`@`0dc4cf1` 离线复现）；(2) **pending 集合**：`approve()` 对「当前并不在 `get_interruptions()` 里」的陈旧 item 仍可静默记账，随后模型再发出同 id 时直接执行（#5413 评论实测）；(3) **Agent 身份巧合防护**：换新 `Agent` 实例则 match 失败——模块级单例 Agent（常见写法）反而中招；(4) **与会话完整性联动**：并行批次异常不得丢掉已完成的 call/output（#5327）；审批后的 tool output 与 call 必须同生共死（#4125）。不是「怎么做 human-in-the-loop」入门
+- **拟用案例 / 对照：**
+  1. **BAD#1 跨 run 转让审批（OpenAI Agents Python）** #5413（open；测于 v0.23.1 / `main`@`0dc4cf1`）：`state2.approve(old_approval_item)` 让第二次 `write_marker(path="A")` 无新决策即执行；改参数则正确拒绝；独立复现评论给出 `after run 2: ['A', 'A']`
+  2. **BAD#2 并行 guardrail 丢掉已完成兄弟调用** #5327（closed **completed** 2026-10-14，closer `jbeckwith-oai`；本轮**未从 API 定位到具体 fix PR 号**——正文写「fix 后 0/10 重复建单」，写稿前须再查 closing PR / release note）：`create_ticket` 已成功，`send_email` input guardrail 触发 → Session 只剩 `user`，下轮再开一张票
+  3. **BAD#3 恢复审批回合 + output guardrail → orphan call（streamed）** #4125（closed completed；feature:sessions）：人已 approve 的 tool 跑完后 output guardrail 绊倒 → `run_streamed` session 为 `['user','function_call']` 无 output；非 streamed 路径保留 pair
+  4. **GOOD：** 审批记录带 run id（或 generation），`approve`/`reject` 校验谱系 | 只接受**当前** `get_interruptions()` 里的 item，拒绝预授权未来 call | 应用层自建 `(run_id, call_id, args_digest)` 表，一次性消费（issue 评论中的 app-side guard）| 并行批次异常时先落盘已完成 call/output 再抛 | 审批后的 call 与 output 同事务写入 | 副作用工具另加业务幂等键（评论建议，非 SDK 行为）
+- **§4 业务线：** 同一张退款单 `RF-3390`：工具 `issue_refund`（`needs_approval=True`）。**BAD v1**：客服在 Run 1 批准退 $50；会话重放 / 负载均衡开出 Run 2，模型复用 `call_id`，旧 `ToolApprovalItem` 被 `approve` → 再次打款（回扣 §3.1–§3.2）。**BAD v2**：同 turn 并行 `create_credit_memo` + `send_refund_email`，email guardrail 绊倒 → credit memo 已生成但不进 Session，下轮再生成一张（回扣 §3.4 / #5327）。**GOOD**：Run 2 必须新中断、新人批；自建审批表按 run 消费一次；批次失败仍保留已完成项；`issue_refund` 以 `RF-3390` 业务键幂等（回扣 §3.1–§3.4）
+- **§5 可注入失败点：**
+  1. **注入：** Run 1 批准并执行后，Run 2 同 Agent、同 call_id、同 args，喂入 Run 1 的 approval item → **期望：** `approve` 拒绝或仍中断；工具执行次数不增加
+  2. **注入：** 对「当前 pending 不是该 call」的陈旧 item 调用 `approve` → **期望：** 报错/拒绝，且不能预授权随后出现的同 id 调用
+  3. **注入：** 并行两工具，后完成的那个触发 guardrail 异常 → **期望：** Session / `run_data` 仍含先完成那对 call+output；下轮模型看得见
+- **领域标签：** Agent Host Runtime / Human-in-the-Loop Approval / Session Integrity
+- **专题归属：** **Agent Session-State Integrity**（续篇 #5：#1 orphan 半对；#2 compaction；#3 streaming index；#4 tool-call-id 改写；本篇 = 审批/中断键没有 run 谱系，以及中断路径上已提交副作用从历史上消失）
+- **相关已发文 / 边界：**
+  - vs `orphan-tool-call-session-wedge`：那篇 = 缺 output 导致永久 400；本文 #4125 的 orphan 可被 `drop_orphan_function_calls` 剥掉继续跑，重点是**审批承诺与副作用是否提交**，不重讲 400
+  - vs `mcp-consent-binding-confused-deputy` / `mcp-auth-identity-not-intent`：远程 OAuth/consent；本文 = 本地 RunState 工具审批
+  - vs `subagent-delegation-envelope`：权限是否下传；本文 = 同会话审批票据是否跨 run 复用
+  - vs `agent-write-idempotency`：超时重试幂等；本文把业务幂等键当审批泄漏时的兜底，不重讲幂等协议
+  - vs `durable-agent-execution`：进程死后续跑；本文 #5413 评论提到 resume 与 run id 设计张力，只点一句
+- **参考线索：**
+  - https://github.com/openai/openai-agents-python/issues/5413 — **主证据（issue，open）**；跨 run 转让；多条独立离线复现评论
+  - https://github.com/openai/openai-agents-python/issues/5327 — **主证据（issue，closed completed 2026-10-14；fix PR 号本轮未从 search API 钉死，写稿前必补）**；并行 guardrail 丢已完成调用
+  - https://github.com/openai/openai-agents-python/issues/4125 — **主证据（issue，closed completed）**；恢复审批 + output guardrail → streamed orphan
+  - https://openai.github.io/openai-agents-python/guardrails/ — 旁证文档：output guardrail 绊倒时保留 already-completed tool items（#5327 所引 commit 路径）
+- **备注：** Gate PASS ready — Tue 2026-10-27 refill。写稿禁令：只谈 OpenAI Agents Python 的 RunState，不推断 JS SDK；#5413 无官方 fix，不要写已修；#5327 虽 completed 但 Scout 本轮未读到 closing PR——Writer 开写前用 `closed_by_pull_requests` / release 再核一版号；#4125 披露作者为 AI agent，机制以 issue 正文与 repro 为准；第三方 Tracekit / agent-approval-gate 只可作「应用层自建表」类比，不写成 SDK 方案；真实模型是否复用 call_id 未测（报告与复现均为 ScriptedModel）。P1。
+
 ### [idea] 2026-10-08 | P2 | mcp-sampling-server-controlled-prompt
 - **工作标题：** MCP Sampling：Server 借 Client 的模型说话
 - **失败面（MCP Client sampling 信任边界，非 tool description 投毒）：** Server 通过 `sampling/createMessage` 控制 prompt 和 `systemPrompt` 并消费补全 → 隐藏指令消耗配额 / 劫持后续对话 / 诱发隐蔽工具调用
@@ -602,3 +662,4 @@
 - 2026-10-21 Scout: Wed verify PR — correct published `streaming-tool-call-index-collision` (7 publish-note discrepancies re-checked against API + pages: #3203 = reporter-closed with state_reason=duplicate → #3201, page shows "Closed as duplicate"; quote source = #3203 repro-script comment, not PR #3232; "Kimi 2.6" verbatim; #21331 closed completed 2026-03-02 UTC; #21337 merged into staging branch, release unverified; #37792 open, #33682 / #39012 closed unmerged per API; unsloth slot / glued-name claims are PR-body only, no call count); correct ready `mcp-server-instance-reuse-cross-client-leak` mechanism per GHSA-345p Impact/Patches (final responses can mis-route → requester timeout; in-request progress/sampling/elicitation leak silently only on JSON-RPC id collision, else throw; spontaneous → last-connected), PASS keep ready; add ready `mcp-cancellation-not-propagated` (P2, Runtime Failure Handling #2; python-sdk #2507 / PR #2838 / #2416) + `tool-call-id-rewrite-cross-provider` (P2, Session-State Integrity #4; litellm PR #40872 / #34522 / #26060); keep mcp-sampling as idea. Ready = 3; Writer order: mcp-server-instance-reuse-cross-client-leak → mcp-cancellation-not-propagated → tool-call-id-rewrite-cross-provider.
 - 2026-10-25 Scout: rebuild stale #83 onto current main after `mcp-cancellation-not-propagated` published (commit 07c1590a; main tip later rolled traffic). Folded the five MCP-reuse Writer/Reviewer 10-21～22 corrections into published-entry **Scout 更正** notes (no posts/ rewrite); kept cancellation `published` and recorded A/B/C-by-`notifications/cancelled` + #2480 comment-vs-API divergence as backlog alignment; retargeted cancellation / tool-call-id / output-schema boundary lines to `vs published` for reuse (+ cancellation for output-schema); added ready `mcp-output-schema-validation-swallows-tool-errors` (P2, MCP/Host Tool-Result Fidelity #2; TS #2748 / Python #2429 / TS #2612). Ready = 2; Writer order: tool-call-id-rewrite-cross-provider → mcp-output-schema-validation-swallows-tool-errors.
 - 2026-10-26 Coordinator: Reviewer Approve → publish posts/tool_call_id_rewrite_cross_provider.md (Agent Session-State Integrity #4); backlog tool-call-id-rewrite-cross-provider → published. Ready left 1 (mcp-output-schema-validation-swallows-tool-errors).
+- 2026-10-27 Scout: Tue refill — after tool-call-id published; main Ready was 1. +2 ready (P1): `mcp-progress-same-chunk-unknown-token` (Runtime Failure Handling #3), `tool-approval-cross-run-transfer` (Session-State Integrity #5). Ready on head = 3; Writer order: mcp-output-schema-validation-swallows-tool-errors → mcp-progress-same-chunk-unknown-token → tool-approval-cross-run-transfer.
