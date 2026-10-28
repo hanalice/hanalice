@@ -1,9 +1,10 @@
 # Posts Tagged With: #Agent
 
-Total: 20 posts
+Total: 21 posts
 
 ---
 
+- [2026-10-28] [工具报了错，模型却只看到 -32602：MCP outputSchema 校验把 tool error 吞成协议错误](../posts/mcp_output_schema_validation_swallows_tool_errors.md)
 - [2026-10-26] [换了个模型，会话就 400 了：tool call id 在跨 provider 重放时被改写](../posts/tool_call_id_rewrite_cross_provider.md)
 - [2026-10-23] [客户端超时了，工具还在跑：MCP 取消没过线，迟到的取消又把连接打断](../posts/mcp_cancellation_not_propagated.md)
 - [2026-10-22] [MCP Server 实例复用：一个 McpServer 连两个客户端，响应、elicitation 与通知各按自己的条件发错地方](../posts/mcp_server_instance_reuse_cross_client_leak.md)
