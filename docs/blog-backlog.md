@@ -362,7 +362,7 @@
 - **为何够深（非科普）：** 主线锁 **审批是「对哪一次执行承诺」的能力，不是「对这个 call_id 形状的永久通行证」**。四点：(1) **谱系**：批准必须绑定 issuing run（或 execution generation），跨 run 重放 `ToolApprovalItem` 应拒绝（#5413；多人在 `main`@`0dc4cf1` 离线复现）；(2) **pending 集合**：`approve()` 对「当前并不在 `get_interruptions()` 里」的陈旧 item 仍可静默记账，随后模型再发出同 id 时直接执行（#5413 评论实测）；(3) **Agent 身份巧合防护**：换新 `Agent` 实例则 match 失败——模块级单例 Agent（常见写法）反而中招；(4) **与会话完整性联动**：并行批次异常不得丢掉已完成的 call/output（#5327）；审批后的 tool output 与 call 必须同生共死（#4125）。不是「怎么做 human-in-the-loop」入门
 - **拟用案例 / 对照：**
   1. **BAD#1 跨 run 转让审批（OpenAI Agents Python）** #5413（open；测于 v0.23.1 / `main`@`0dc4cf1`）：`state2.approve(old_approval_item)` 让第二次 `write_marker(path="A")` 无新决策即执行；改参数则正确拒绝；独立复现评论给出 `after run 2: ['A', 'A']`
-  2. **BAD#2 并行 guardrail 丢掉已完成兄弟调用** #5327（closed **completed** 2026-10-14，closer `jbeckwith-oai`；本轮**未从 API 定位到具体 fix PR 号**——正文写「fix 后 0/10 重复建单」，写稿前须再查 closing PR / release note）：`create_ticket` 已成功，`send_email` input guardrail 触发 → Session 只剩 `user`，下轮再开一张票
+  2. **BAD#2 并行 guardrail 丢掉已完成兄弟调用** #5327（closed **completed** 2026-10-14，closer `jbeckwith-oai`；fix PR #5332 merged 2026-10-14）：`create_ticket` 已成功，`send_email` input guardrail 触发 → Session 只剩 `user`，下轮再开一张票；报告正文写「fix 后 0/10 重复建单」——合入后的 release 版号写稿前再核
   3. **BAD#3 恢复审批回合 + output guardrail → orphan call（streamed）** #4125（closed completed；feature:sessions）：人已 approve 的 tool 跑完后 output guardrail 绊倒 → `run_streamed` session 为 `['user','function_call']` 无 output；非 streamed 路径保留 pair
   4. **GOOD：** 审批记录带 run id（或 generation），`approve`/`reject` 校验谱系 | 只接受**当前** `get_interruptions()` 里的 item，拒绝预授权未来 call | 应用层自建 `(run_id, call_id, args_digest)` 表，一次性消费（issue 评论中的 app-side guard）| 并行批次异常时先落盘已完成 call/output 再抛 | 审批后的 call 与 output 同事务写入 | 副作用工具另加业务幂等键（评论建议，非 SDK 行为）
 - **§4 业务线：** 同一张退款单 `RF-3390`：工具 `issue_refund`（`needs_approval=True`）。**BAD v1**：客服在 Run 1 批准退 $50；会话重放 / 负载均衡开出 Run 2，模型复用 `call_id`，旧 `ToolApprovalItem` 被 `approve` → 再次打款（回扣 §3.1–§3.2）。**BAD v2**：同 turn 并行 `create_credit_memo` + `send_refund_email`，email guardrail 绊倒 → credit memo 已生成但不进 Session，下轮再生成一张（回扣 §3.4 / #5327）。**GOOD**：Run 2 必须新中断、新人批；自建审批表按 run 消费一次；批次失败仍保留已完成项；`issue_refund` 以 `RF-3390` 业务键幂等（回扣 §3.1–§3.4）
@@ -380,10 +380,44 @@
   - vs `durable-agent-execution`：进程死后续跑；本文 #5413 评论提到 resume 与 run id 设计张力，只点一句
 - **参考线索：**
   - https://github.com/openai/openai-agents-python/issues/5413 — **主证据（issue，open）**；跨 run 转让；多条独立离线复现评论
-  - https://github.com/openai/openai-agents-python/issues/5327 — **主证据（issue，closed completed 2026-10-14；fix PR 号本轮未从 search API 钉死，写稿前必补）**；并行 guardrail 丢已完成调用
+  - https://github.com/openai/openai-agents-python/issues/5327 — **主证据（issue，closed completed 2026-10-14，经已合 PR #5332，merged 2026-10-14）**；并行 guardrail 丢已完成调用
   - https://github.com/openai/openai-agents-python/issues/4125 — **主证据（issue，closed completed）**；恢复审批 + output guardrail → streamed orphan
   - https://openai.github.io/openai-agents-python/guardrails/ — 旁证文档：output guardrail 绊倒时保留 already-completed tool items（#5327 所引 commit 路径）
-- **备注：** Gate PASS ready — Tue 2026-10-27 refill。写稿禁令：只谈 OpenAI Agents Python 的 RunState，不推断 JS SDK；#5413 无官方 fix，不要写已修；#5327 虽 completed 但 Scout 本轮未读到 closing PR——Writer 开写前用 `closed_by_pull_requests` / release 再核一版号；#4125 披露作者为 AI agent，机制以 issue 正文与 repro 为准；第三方 Tracekit / agent-approval-gate 只可作「应用层自建表」类比，不写成 SDK 方案；真实模型是否复用 call_id 未测（报告与复现均为 ScriptedModel）。P1。
+- **备注：** Gate PASS ready — Tue 2026-10-27 refill。写稿禁令：只谈 OpenAI Agents Python 的 RunState，不推断 JS SDK；#5413 无官方 fix，不要写已修；#5327 由 PR #5332（merged 2026-10-14，`fix: preserve completed tool outputs when a sibling fails`）关闭——写稿时核该 PR 进了哪个 release tag，不要写「SDK 仍必现」为现状；#4125 披露作者为 AI agent，机制以 issue 正文与 repro 为准；第三方 Tracekit / agent-approval-gate 只可作「应用层自建表」类比，不写成 SDK 方案；真实模型是否复用 call_id 未测（报告与复现均为 ScriptedModel）。P1。
+
+
+### [ready] 2026-10-29 | P1 | mcp-list-changed-reload-blocks-receive-loop
+- **工作标题：** `list_changed` 一来就卡死：通知 handler 里 await `list_tools`，接收环回不去，成功结果变成 "Error: Function failed."
+- **失败面（MCP Host / Client 协议分发层 · 通知 handler 与 receive loop 的重入，非发现层目录陈旧、非 progress 顺序、非取消语义）：** MCP server 在 `tools/call` 执行中或刚返回前后发出 `notifications/tools/list_changed`（MATLAB / MongoDB 等动态工具目录常见）→ Host 的 `message_handler` **在 SDK 单线程 `_receive_loop` 回调里直接 `await load_tools()` / `session.list_tools()`** → `list_tools` 发出去的响应永远进不了 receive loop（loop 卡在 handler 里）→ 同连接上的 `call_tool` 超时 → Agent 把真实成功结果丢掉，给模型塞 `"Error: Function failed."`（误判「MATLAB/Mongo 工具坏了 / 超时调大 / stdio 不稳」）
+- **为何够深（非科普）：** 主线锁 **「订阅了 list_changed ≠ 可以在 receive 回调里再发 RPC」**。三层可拆：(1) **重入死锁**：notification handler 与 in-flight request 共享同一条 receive loop，handler 内 await 任何需要响应的 RPC（`list_tools` / `list_prompts` / 甚至 `_ensure_connected`→`ping`）都会把自己卡死（microsoft/agent-framework #4828 + PR #4866 原文机制）；(2) **失败伪装**：SDK 直连同一 server 成功，Host 封装路径超时后把假错误喂给模型——值班会去查工具实现，而不是 Host 的 handler；(3) **与「不刷新」对称的另一极**：只打日志 / fire-and-forget 不 await → 下一轮仍用旧目录（Zed #57473；与已发 `mcp-progressive-disclosure` 的「通知≠刷新」相邻但更窄：本篇坏的是**在途 call 的完成**，不是下一轮召回）。GOOD：把 reload 排成后台 Task、立刻让出 receive loop（#4866 `_schedule_reload`）；或只脏标记缓存、在 turn 边界 / 显式 `connect(reset=True)` 再拉；下一轮推理前 await 在途 refresh（Zed #57473 提议）。不是「怎么订阅 list_changed」入门
+- **拟用案例 / 对照：**
+  1. **BAD#1 Host handler 内 await reload → 死锁（Microsoft Agent Framework Python）** #4828（closed **completed**；fix PR #4866 merged 2026-05-13，base `main`）：`matlab-mcp-core-server` 在工具执行期发 `tools/list_changed`；直连 `mcp.ClientSession.call_tool("detect_matlab_toolboxes")` 成功（`isError=False`），经 `MCPStdioTool` 则 `ToolExecutionException` 超时；Agent 第二轮请求的 `function_call_output` 是 verbatim `"Error: Function failed."`。PR #4866 钉死：handler 跑在 SDK 单线程 `_receive_loop` 上，`await load_tools()` → `list_tools` 响应无法投递
+  2. **BAD#2 同类死锁的竞争修复曾想「改成只打日志」** #4896（closed completed 2026-05-14；症状原文是 mongodb-mcp-server 在工具执行中发 `resources/updated`，`list-collections` 经 `MCPStdioTool` 挂死，直连 SDK 成功）交叉引用未合的 PR #4898（closed **未合**）：把 inline reload 改成 debug log——能消死锁，但立刻退回「通知到了目录不刷」。真正合入的是 #4866 的后台 Task 路线；**不要把 #4896 的 resources/updated 症状写成 #4866 已证明修复的同一条 bug**（关闭时间紧随 #4866，但 PR 正文与测试针对的是 list_changed / load_tools）
+  3. **BAD#3 另一极：detach 刷新、不等待 → 首轮调新工具失败（Zed）** #57473（closed **not_planned**，`github-actions` stale bot，**未修复**）：meta-tool 加载新工具后 server 先发 `tools/list_changed` 再回 `tools/call` result；Host `detach` 刷目录，agent 下一 turn 仍用旧 registry → tool not found，模型重试才成功。与 BAD#1 同属「list_changed 生命周期」，失败面是**下一轮发现**而非**本轮 call 完成**
+  4. **旁证：** editor-code-assistant/eca@8746ab0 — plumcp 默认 list_changed handler 在 initialize 完成前就 `fetch-tools`，server 忽略 initialize 前请求 → handler 永久等待，客户端无法完成握手（pre-initialize 死锁变体）；livekit/agents #5378（open）+ PR #5604（open 未合）— 完全忽略 list_changed（更靠近已发 progressive-disclosure，只作「Host 常见三种坏法」对照，不当事主线复现）
+  5. **GOOD：** notification handler 只调度、不 await RPC（#4866 `_schedule_reload` + 强引用 Task 防 GC）| 缓存脏标记，turn 边界 / 显式 reload 再 `list_tools` | 下一轮拼 tools 前 await 在途 refresh（#57473）| 指标：`call_tool` 超时且直连 SDK 成功的次数；unknown/missing tool 在 list_changed 后首轮的次数
+- **§4 业务线：** 同一台工程计算会话 `ENG-4410`：Host 挂 MATLAB MCP，工具 `detect_matlab_toolboxes` 跑完会发 `tools/list_changed`（工具目录随 toolbox 探测变化）。**BAD v1**：Agent Framework `MCPStdioTool` 在 message_handler 里 `await load_tools()` → receive loop 卡死 → `detect_matlab_toolboxes` 已在 server 侧跑完，模型只看到 `"Error: Function failed."`，值班去重装 MATLAB（回扣 §3.1–§3.2）。**BAD v2**：团队「修复」成 handler 只打日志 → 死锁没了，但后续 `run_simulation` 新工具永远不进目录，模型坚持「没有仿真工具」（回扣 §3.3 / 与 progressive-disclosure 互链一句）。**GOOD**：handler 调度后台 reload；本轮 `call_tool` 先完成；下一 turn 前 await 刷新后的目录；`ENG-4410` 第一次就拿到 toolbox 列表并看见新工具（回扣 §3.1–§3.3）
+- **§5 可注入失败点：**
+  1. **注入：** mock server 在 `tools/call` 返回前同步发出 `notifications/tools/list_changed`；Host 使用「handler 内 await list_tools」路径 → **期望：** `call_tool` 在超时前返回真实结果；无 `"Error: Function failed."`
+  2. **注入：** 同 1，但 handler 改为后台 Task reload → **期望：** 本轮结果正确；随后 `list_tools` 缓存更新（或脏标记后下次拉取为新目录）
+  3. **注入：** meta-tool 加载新工具后，list_changed 与 call result 同流到达，立即开下一 agent turn 调新工具 → **期望：** 首轮即命中新工具，或明确等待 refresh，而不是 tool not found 后再撞大运重试
+- **领域标签：** MCP Host / Client Protocol Dispatch · Notification Handler Reentrancy · Stdio Receive Loop
+- **专题归属：** **Agent Runtime Failure Handling**（续篇 #4：#1 分层重试；#2 取消未下发；#3 progress 与 result 分发顺序；本篇 = 成功路径上的 list_changed 通知处理把「已成功的 tools/call」卡成超时假失败）
+- **相关已发文 / 边界：**
+  - vs published `mcp-progressive-disclosure`：那篇现象 E = list_changed 到了 Host **不刷 / 只打日志** → 目录陈旧、召回 miss；本篇 = Host **刷了但刷在 receive 回调里 await** → 本轮 call 死锁。互链一句「通知≠刷新」后立刻转到重入，不重讲 Tool Search / Inspect / cache
+  - vs ready `mcp-progress-same-chunk-unknown-token`：那篇 = progress 通知与 result 的微任务顺序；本篇 = list_changed 通知 handler 里再发 RPC。同属协议分发，失败信号不同（unknown token / 断连 vs call 超时假失败）
+  - vs published `mcp-cancellation-not-propagated` / `mcp-server-instance-reuse-cross-client-leak`：取消生命周期与多客户端实例复用；本篇是单连接 receive loop 重入
+  - vs published `mcp-output-schema-validation-swallows-tool-errors`：那篇结果内容被校验换掉；本篇结果根本没回到 Host
+  - vs ready `tool-approval-cross-run-transfer`：审批键空间；与 list_changed 无关
+- **参考线索：**
+  - https://github.com/microsoft/agent-framework/issues/4828 — **主证据（issue，closed completed）**；直连 SDK 成功 vs Host 封装超时；模型侧 verbatim `"Error: Function failed."`
+  - https://github.com/microsoft/agent-framework/pull/4866 — **主证据（fix PR，merged 2026-05-13，base `main`，merge `7d23582e`）**；机制原文 + `_schedule_reload`；含回归测试
+  - https://github.com/zed-industries/zed/issues/57473 — **主证据（issue，closed not_planned by stale bot，未修复）**；list_changed 后首轮 tool not found 的对称坏法
+  - https://github.com/microsoft/agent-framework/issues/4896 — 旁证（closed completed；resources/updated 挂死；关闭紧随 #4866，勿断言同一修复覆盖）
+  - https://github.com/microsoft/agent-framework/pull/4898 — 旁证（closed **未合**）：曾提议用「只打日志」消死锁
+  - https://github.com/editor-code-assistant/eca/commit/8746ab0c56485f697e31cb8d47cac61bed47c4d4 — 旁证：initialize 前 list_changed handler 死锁
+  - https://github.com/livekit/agents/issues/5378 / https://github.com/livekit/agents/pull/5604 — 旁证（PR open 未合）：忽略 list_changed
+- **备注：** Gate PASS ready — Thu 2026-10-29 refill（读 #4828 / #4866 / #4896 / #4898 / #57473 正文与 API 状态；eca commit message；livekit #5378/#5604）。写稿禁令：允许引用 #4828 日志逐字超时 `Timed out while waiting for response to ClientRequest. Waited 30.0 seconds.`；并注明 PR #4866 正文写 “Fixes #4828 and #4896”。不要写「MCP 客户端都会死锁」——问题在 Host 把 await RPC 放进 SDK message_handler 的封装，直连 ClientSession 的路径在 #4828/#4896 里都成功；不要写 Agent Framework「仍必现」——#4866 已合 main（写稿前核 release 版号是否包含 7d23582e）；不要把 #4896 的 `resources/updated` 症状说成 #4866 回归测试覆盖的同一条；#57473 是 bot not_planned，不是维护者拒绝修复；#4898 未合，不能当 GOOD；livekit 忽略通知更靠近 progressive-disclosure，正文最多一句对照；§4 `ENG-4410` 是设计示例。P1。
 
 ### [idea] 2026-10-08 | P2 | mcp-sampling-server-controlled-prompt
 - **工作标题：** MCP Sampling：Server 借 Client 的模型说话
@@ -666,3 +700,4 @@
 - 2026-10-26 Coordinator: Reviewer Approve → publish posts/tool_call_id_rewrite_cross_provider.md (Agent Session-State Integrity #4); backlog tool-call-id-rewrite-cross-provider → published. Ready left 1 (mcp-output-schema-validation-swallows-tool-errors).
 - 2026-10-27 Scout: Tue refill — after tool-call-id published; main Ready was 1. +2 ready (P1): `mcp-progress-same-chunk-unknown-token` (Runtime Failure Handling #3), `tool-approval-cross-run-transfer` (Session-State Integrity #5). Ready on head = 3; Writer order: mcp-output-schema-validation-swallows-tool-errors → mcp-progress-same-chunk-unknown-token → tool-approval-cross-run-transfer.
 - 2026-10-28 Coordinator: Reviewer Approve → publish posts/mcp_output_schema_validation_swallows_tool_errors.md (MCP/Host Tool-Result Fidelity #2); backlog mcp-output-schema-validation-swallows-tool-errors → published. Ready left 2 (mcp-progress-same-chunk-unknown-token, tool-approval-cross-run-transfer).
+- 2026-10-29 Scout: Thu refill — main Ready was 2 after output-schema published. Fold #5332 (merged 2026-10-14) into ready `tool-approval-cross-run-transfer` (#5327 closing PR). Add ready `mcp-list-changed-reload-blocks-receive-loop` (P1, Runtime Failure Handling #4; agent-framework #4828 / PR #4866 merged + Zed #57473 not_planned). Keep mcp-sampling as idea. Ready = 3; Writer order: mcp-progress-same-chunk-unknown-token → tool-approval-cross-run-transfer → mcp-list-changed-reload-blocks-receive-loop.
