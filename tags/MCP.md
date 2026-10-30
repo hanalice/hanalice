@@ -1,9 +1,10 @@
 # Posts Tagged With: #MCP
 
-Total: 9 posts
+Total: 10 posts
 
 ---
 
+- [2026-10-30] [进度通知和结果同一包到了：客户端先删 handler，再把「未知 token」当成断连](../posts/mcp_progress_same_chunk_unknown_token.md)
 - [2026-10-28] [工具报了错，模型却只看到 -32602：MCP outputSchema 校验把 tool error 吞成协议错误](../posts/mcp_output_schema_validation_swallows_tool_errors.md)
 - [2026-10-23] [客户端超时了，工具还在跑：MCP 取消没过线，迟到的取消又把连接打断](../posts/mcp_cancellation_not_propagated.md)
 - [2026-10-22] [MCP Server 实例复用：一个 McpServer 连两个客户端，响应、elicitation 与通知各按自己的条件发错地方](../posts/mcp_server_instance_reuse_cross_client_leak.md)
