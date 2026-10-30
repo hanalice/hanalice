@@ -325,7 +325,7 @@
 
 - **已发文：** posts/mcp_output_schema_validation_swallows_tool_errors.md
 
-### [ready] 2026-10-27 | P1 | mcp-progress-same-chunk-unknown-token
+### [published] 2026-10-30 | P1 | mcp-progress-same-chunk-unknown-token
 - **工作标题：** 进度通知和结果同一包到了：客户端先删 handler，再把「未知 token」当成断连
 - **失败面（MCP 客户端协议分发层 / progress handler 生命周期，非取消语义、非连接实例复用、非工具结果校验）：** Server 在返回 `tools/call` 结果之前（甚至同一 stdio 读缓冲里）写出 `notifications/progress` → Client 的 `_onresponse` **同步**删掉 `_progressHandlers`，而 `_onnotification` 把 progress **推到 microtask** 才跑 → 后到的（其实先写出的）progress 找不到 handler → `Received a progress notification for an unknown token: …` 进 `onerror`。Host 侧（Claude Code）再把这条协议错误当成 stdio transport 故障，打出 `STDIO connection dropped` / `Closing transport`，重连；同连接上其它在途 `tools/call` 被截断或丢参数（误判「MCP server 不稳 / 进度实现写错 / 网络抖」）
 - **为何够深（非科普）：** 主线锁 **「wire 顺序 ≠ 客户端处理顺序」**：问题不是 server 违规迟到，而是客户端自己把同一次 read 里的通知排到响应之后。三层可拆：(1) **同 chunk 重排**：通知走 microtask、响应当场删 handler → 终端 `progress===total` 在 wire 上先于 result，却在客户端变成「未知 token」（#2580 + #2967 评论复现表：1.29.0 上 50 次调用里 43 次 `received=1`+3 errors）；(2) **真迟到**：响应处理完之后才到的 progress 仍应静默忽略，而不是 `onerror`（#2586 的 recently-completed FIFO）；(3) **Host 过激反应**：把未知 token 当成 transport 致命错误 → 断 stdio / 截断在途调用（Claude Code #102831 有线抓包；#64475 报告大参数 `body: expected string, received undefined`）。GOOD 对照：#2967 把 handler 删除推迟一个 microtask（同 tick 通知先送达）；#2586 对刚完成的 token 静默丢弃；Host 对未知 progress token 只 debug、不断连。不是「怎么发 progress」入门
@@ -355,6 +355,8 @@
   - https://github.com/anthropics/claude-code/issues/64475 — 旁证（closed not_planned，stale，未修复）：断连截断在途大参数
   - https://github.com/anthropics/claude-code/issues/47765 — 旁证（closed duplicate→#47378；正文与 #47378 症状不一致，引用须注明）
 - **备注：** Gate PASS ready — Tue 2026-10-27 refill（读 #2580 正文+评论、#2967/#2586 PR 状态、#102831/#64475/#47765）。写稿禁令：不要写「SDK 已修复」——#2967/#2586 均未合；不要把 #47378 当本坑主线；#64475 的参数截断是报告者假设+日志相关，独立 MCP 客户端对照证明非 server bug，但 Claude Code 源码未开源核到具体 if；apple-photos 数字是报告者负载测试；「终端 progress 不可做完成闸门」是本文主张。P1。
+
+- **已发文：** posts/mcp_progress_same_chunk_unknown_token.md
 
 ### [ready] 2026-10-27 | P1 | tool-approval-cross-run-transfer
 - **工作标题：** 上次点过同意，这次没问就执行了：审批记录只绑 call_id，不绑 run
@@ -701,3 +703,4 @@
 - 2026-10-27 Scout: Tue refill — after tool-call-id published; main Ready was 1. +2 ready (P1): `mcp-progress-same-chunk-unknown-token` (Runtime Failure Handling #3), `tool-approval-cross-run-transfer` (Session-State Integrity #5). Ready on head = 3; Writer order: mcp-output-schema-validation-swallows-tool-errors → mcp-progress-same-chunk-unknown-token → tool-approval-cross-run-transfer.
 - 2026-10-28 Coordinator: Reviewer Approve → publish posts/mcp_output_schema_validation_swallows_tool_errors.md (MCP/Host Tool-Result Fidelity #2); backlog mcp-output-schema-validation-swallows-tool-errors → published. Ready left 2 (mcp-progress-same-chunk-unknown-token, tool-approval-cross-run-transfer).
 - 2026-10-29 Scout: Thu refill — main Ready was 2 after output-schema published. Fold #5332 (merged 2026-10-14) into ready `tool-approval-cross-run-transfer` (#5327 closing PR). Add ready `mcp-list-changed-reload-blocks-receive-loop` (P1, Runtime Failure Handling #4; agent-framework #4828 / PR #4866 merged + Zed #57473 not_planned). Keep mcp-sampling as idea. Ready = 3; Writer order: mcp-progress-same-chunk-unknown-token → tool-approval-cross-run-transfer → mcp-list-changed-reload-blocks-receive-loop.
+- 2026-10-30 Coordinator: Reviewer Approve → publish posts/mcp_progress_same_chunk_unknown_token.md (Agent Runtime Failure Handling #3); backlog mcp-progress-same-chunk-unknown-token → published. Ready left 2 (tool-approval-cross-run-transfer, mcp-list-changed-reload-blocks-receive-loop).
