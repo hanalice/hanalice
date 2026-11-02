@@ -1,9 +1,10 @@
 # Posts Tagged With: #Agent
 
-Total: 22 posts
+Total: 23 posts
 
 ---
 
+- [2026-11-02] [上次点过同意，这次没问就执行了：审批记录只绑 call_id，不绑 run](../posts/tool_approval_cross_run_transfer.md)
 - [2026-10-30] [进度通知和结果同一包到了：客户端先删 handler，再把「未知 token」当成断连](../posts/mcp_progress_same_chunk_unknown_token.md)
 - [2026-10-28] [工具报了错，模型却只看到 -32602：MCP outputSchema 校验把 tool error 吞成协议错误](../posts/mcp_output_schema_validation_swallows_tool_errors.md)
 - [2026-10-26] [换了个模型，会话就 400 了：tool call id 在跨 provider 重放时被改写](../posts/tool_call_id_rewrite_cross_provider.md)
