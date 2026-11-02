@@ -358,7 +358,7 @@
 
 - **已发文：** posts/mcp_progress_same_chunk_unknown_token.md
 
-### [ready] 2026-10-27 | P1 | tool-approval-cross-run-transfer
+### [published] 2026-11-02 | P1 | tool-approval-cross-run-transfer
 - **工作标题：** 上次点过同意，这次没问就执行了：审批记录只绑 call_id，不绑 run
 - **失败面（Agent Host HITL / RunState 审批键空间，非 MCP OAuth consent、非子代理权限包络、非工具结果截断）：** 带 `needs_approval=True` 的工具在 Run 1 打断 → 人审批 → 执行；Run 2（新 run、常复用同一 `Agent` 实例）模型又发出**相同** `call_id` + 相同参数 → 应用把 Run 1 的 `ToolApprovalItem` 塞进 `state2.approve(...)` → `_approval_items_match` 只比 `(agent, invocation type, call_id, arguments fingerprint)`，**没有 run 谱系** → 受保护工具再次执行，本 run 无人点同意。旁路：(a) 并行工具批次里兄弟调用的 guardrail 炸掉时，已完成的副作用调用从 Session 消失，下一轮模型重做（#5327）；(b) 恢复审批回合上 output guardrail 绊倒时，streamed 路径留下无 output 的 orphan `function_call`（#4125）（误判「模型乱调 / Session 坏了 / 用户点过所以安全」）
 - **为何够深（非科普）：** 主线锁 **审批是「对哪一次执行承诺」的能力，不是「对这个 call_id 形状的永久通行证」**。四点：(1) **谱系**：批准必须绑定 issuing run（或 execution generation），跨 run 重放 `ToolApprovalItem` 应拒绝（#5413；多人在 `main`@`0dc4cf1` 离线复现）；(2) **pending 集合**：`approve()` 对「当前并不在 `get_interruptions()` 里」的陈旧 item 仍可静默记账，随后模型再发出同 id 时直接执行（#5413 评论实测）；(3) **Agent 身份巧合防护**：换新 `Agent` 实例则 match 失败——模块级单例 Agent（常见写法）反而中招；(4) **与会话完整性联动**：并行批次异常不得丢掉已完成的 call/output（#5327）；审批后的 tool output 与 call 必须同生共死（#4125）。不是「怎么做 human-in-the-loop」入门
@@ -387,6 +387,7 @@
   - https://openai.github.io/openai-agents-python/guardrails/ — 旁证文档：output guardrail 绊倒时保留 already-completed tool items（#5327 所引 commit 路径）
 - **备注：** Gate PASS ready — Tue 2026-10-27 refill。写稿禁令：只谈 OpenAI Agents Python 的 RunState，不推断 JS SDK；#5413 无官方 fix，不要写已修；#5327 由 PR #5332（merged 2026-10-14，`fix: preserve completed tool outputs when a sibling fails`）关闭——写稿时核该 PR 进了哪个 release tag，不要写「SDK 仍必现」为现状；#4125 披露作者为 AI agent，机制以 issue 正文与 repro 为准；第三方 Tracekit / agent-approval-gate 只可作「应用层自建表」类比，不写成 SDK 方案；真实模型是否复用 call_id 未测（报告与复现均为 ScriptedModel）。P1。
 
+- **已发文：** posts/tool_approval_cross_run_transfer.md
 
 ### [ready] 2026-10-29 | P1 | mcp-list-changed-reload-blocks-receive-loop
 - **工作标题：** `list_changed` 一来就卡死：通知 handler 里 await `list_tools`，接收环回不去，成功结果变成 "Error: Function failed."
@@ -704,3 +705,4 @@
 - 2026-10-28 Coordinator: Reviewer Approve → publish posts/mcp_output_schema_validation_swallows_tool_errors.md (MCP/Host Tool-Result Fidelity #2); backlog mcp-output-schema-validation-swallows-tool-errors → published. Ready left 2 (mcp-progress-same-chunk-unknown-token, tool-approval-cross-run-transfer).
 - 2026-10-29 Scout: Thu refill — main Ready was 2 after output-schema published. Fold #5332 (merged 2026-10-14) into ready `tool-approval-cross-run-transfer` (#5327 closing PR). Add ready `mcp-list-changed-reload-blocks-receive-loop` (P1, Runtime Failure Handling #4; agent-framework #4828 / PR #4866 merged + Zed #57473 not_planned). Keep mcp-sampling as idea. Ready = 3; Writer order: mcp-progress-same-chunk-unknown-token → tool-approval-cross-run-transfer → mcp-list-changed-reload-blocks-receive-loop.
 - 2026-10-30 Coordinator: Reviewer Approve → publish posts/mcp_progress_same_chunk_unknown_token.md (Agent Runtime Failure Handling #3); backlog mcp-progress-same-chunk-unknown-token → published. Ready left 2 (tool-approval-cross-run-transfer, mcp-list-changed-reload-blocks-receive-loop).
+- 2026-11-02 Coordinator: Reviewer Approve → publish posts/tool_approval_cross_run_transfer.md (Agent Session-State Integrity #5); backlog tool-approval-cross-run-transfer → published. Ready left 1 (mcp-list-changed-reload-blocks-receive-loop).
