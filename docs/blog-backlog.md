@@ -411,7 +411,7 @@
   - vs ready `mcp-progress-same-chunk-unknown-token`：那篇 = progress 通知与 result 的微任务顺序；本篇 = list_changed 通知 handler 里再发 RPC。同属协议分发，失败信号不同（unknown token / 断连 vs call 超时假失败）
   - vs published `mcp-cancellation-not-propagated` / `mcp-server-instance-reuse-cross-client-leak`：取消生命周期与多客户端实例复用；本篇是单连接 receive loop 重入
   - vs published `mcp-output-schema-validation-swallows-tool-errors`：那篇结果内容被校验换掉；本篇结果根本没回到 Host
-  - vs ready `tool-approval-cross-run-transfer`：审批键空间；与 list_changed 无关
+  - vs published `tool-approval-cross-run-transfer`：审批键空间；与 list_changed 无关
 - **参考线索：**
   - https://github.com/microsoft/agent-framework/issues/4828 — **主证据（issue，closed completed）**；直连 SDK 成功 vs Host 封装超时；模型侧 verbatim `"Error: Function failed."`
   - https://github.com/microsoft/agent-framework/pull/4866 — **主证据（fix PR，merged 2026-05-13，base `main`，merge `7d23582e`）**；机制原文 + `_schedule_reload`；含回归测试
@@ -421,6 +421,65 @@
   - https://github.com/editor-code-assistant/eca/commit/8746ab0c56485f697e31cb8d47cac61bed47c4d4 — 旁证：initialize 前 list_changed handler 死锁
   - https://github.com/livekit/agents/issues/5378 / https://github.com/livekit/agents/pull/5604 — 旁证（PR open 未合）：忽略 list_changed
 - **备注：** Gate PASS ready — Thu 2026-10-29 refill（读 #4828 / #4866 / #4896 / #4898 / #57473 正文与 API 状态；eca commit message；livekit #5378/#5604）。写稿禁令：允许引用 #4828 日志逐字超时 `Timed out while waiting for response to ClientRequest. Waited 30.0 seconds.`；并注明 PR #4866 正文写 “Fixes #4828 and #4896”。不要写「MCP 客户端都会死锁」——问题在 Host 把 await RPC 放进 SDK message_handler 的封装，直连 ClientSession 的路径在 #4828/#4896 里都成功；不要写 Agent Framework「仍必现」——#4866 已合 main（写稿前核 release 版号是否包含 7d23582e）；不要把 #4896 的 `resources/updated` 症状说成 #4866 回归测试覆盖的同一条；#57473 是 bot not_planned，不是维护者拒绝修复；#4898 未合，不能当 GOOD；livekit 忽略通知更靠近 progressive-disclosure，正文最多一句对照；§4 `ENG-4410` 是设计示例。P1。
+
+### [ready] 2026-11-03 | P1 | mcp-streamable-http-404-session-stuck
+- **工作标题：** 服务端一重启，客户端永远 404：Streamable HTTP 会话丢了也不重握手
+- **失败面（MCP Streamable HTTP 客户端会话生命周期 / 404 恢复层，非 OAuth、非取消、非 list_changed 重入）：** 有状态 Streamable HTTP server 丢了会话（进程重启、证书轮转、keepalive 超时、显式 eviction）→ 之后带旧 `MCP-Session-Id` 的 POST 一律 HTTP 404 → 规范要求客户端**清掉 session id、无 id 再发 `InitializeRequest`**；TS / Python SDK 客户端却只抛错、**不**清 id、**不**重握手 → 同一进程里之后每一次 `tools/call` 继续带僵死 session id，永远 404（误判「MCP server 挂了 / 网络抖 / 把超时调大 / 换 stdio」）
+- **为何够深（非科普）：** 主线锁 **「404 + 已带 session id」是会话终态信号，不是普通传输错误**。三层可拆：(1) **规范 MUST**：2025-11-25 transports Session Management 第 4 点原文：收到带 `MCP-Session-Id` 的请求的 HTTP 404 时，客户端 **MUST** 发不带 session id 的新 `InitializeRequest`；(2) **SDK 缺口**：TS v1 `#1708` / v2 `#3056` 的 POST `_send` 只对 401 做特殊处理，404 直接 `throw`，且 `_sessionId` 仅在成功 initialize 时写入、从不因 404 清除；Python `#1676` 同样只抛「session terminated」、不重初始化；(3) **Host 分类二次伤害**：丢失会话被包装成普通 `MCPError(-32600, …)`（空 body 回落 `"Session terminated"`；Python server body `"Session not found"`；TS server 用 `-32001`）→ Temporal MCP activity 把 `-32600` 当不可重试 → 本该「新连接再试」的调用被立刻判死（`#3799`）。不是「怎么配 Streamable HTTP」入门
+- **拟用案例 / 对照：**
+ 1. **BAD#1 TS 客户端永不恢复（v1+v2）** typescript-sdk `#1708`（open，`ready for work` / `P2` / `fix proposed`）：`send()` / `_startOrAuthSse()` 遇 404 只抛 `StreamableHTTPError`，不清 `_sessionId`；后续 `send()` 继续带僵死 id → 永久 404。`#3056`（open，v1+v2）：在 `@modelcontextprotocol/client` 2.0.0 的 `dist/index.mjs` 核到同一缺口；长跑 harness 对接 nightly 重启的 Rancher MCP：第一分钟成功，之后整晚每次 `tools/call` 404，只能关 transport / 重启进程。未合前作：`#2150`（作者自关，等 era 架构设计决定）、`#2466`（作者撤回）
+ 2. **BAD#2 Python 客户端同样不重握手** python-sdk `#1676`（open，`ready for work` / `P2` / `improves spec compliance`）：404 路径只发 session terminated 错误（指向 `streamable_http.py`），不发无 session 的新 `InitializeRequest`
+ 3. **BAD#3 错误类型不可区分 → 编排层不重试** python-sdk `#3799`（open）：同一 404 因 body 不同变成 `-32600 "Session terminated"` / `-32600 "Session not found"` / `-32001 "Session not found"`；与普通 invalid request 的 `-32600` 同型。Temporal `ai-integrations` MCP activity 把 `-32600` 标成 non-retryable → server 重启后的合法调用被立刻放弃
+ 4. **GOOD：** 404 + 请求曾带 session id → 清本地 session id → 无 id `InitializeRequest` → 有界地重放失败请求一次（规范 MUST；`#1708`/`#3056`/`#1676` 方向）| 抛出可类型区分的 `SessionNotFoundError`（`#3799`），Host / Temporal 按「会话丢失」重连，不当普通 `-32600` | 指标：`session_404_reinit_count` vs `session_404_unrecovered`
+- **§4 业务线：** 同一长跑运维 agent `OPS-MCP-771` 挂着有状态 Rancher MCP（Streamable HTTP）。**BAD v1**：夜间证书轮转杀了 server 会话 → Host 仍持旧 `MCP-Session-Id` → 之后每个 `list_clusters` 404，值班以为 Rancher 挂了（回扣 §3.1–§3.2）。**BAD v2**：补了 retry，但错误仍是 `-32600`，Temporal activity 直接 FAIL、不换连接（回扣 §3.3）。**GOOD**：404 清 session → 重 `initialize` → 重放一次；`SessionNotFoundError` 走「新会话重试」分支；`OPS-MCP-771` 在重启后第一分钟内恢复（回扣 §3.1–§3.3）
+- **§5 可注入失败点：**
+ 1. **注入：** 已 initialize 的客户端上，server 对该 `MCP-Session-Id` 回 HTTP 404 → **期望：** 客户端清 session id；下一次成功 initialize；失败请求有界重放一次
+ 2. **注入：** 404 后立刻再发 `tools/call`（不经进程重启）→ **期望：** 不再带旧 session id；不是连串 404
+ 3. **注入：** Host / durable worker 收到会话丢失错误 → **期望：** 按可重试的会话丢失处理，不与普通 `-32600` invalid request 走同一条 non-retry 路径
+- **领域标签：** MCP Client / Streamable HTTP / Session Lifecycle
+- **专题归属：** **Agent Runtime Failure Handling**（续篇 #5：#1 分层重试；#2 取消未下发；#3 progress 分发顺序；#4 list_changed 重入；本篇 = 传输层会话终态信号被当成普通错误，成功路径永久卡死）
+- **相关已发文 / 边界：**
+ - vs ready `mcp-list-changed-reload-blocks-receive-loop`：那篇 = 通知 handler 重入卡死本轮 call；本文 = 会话已死后客户端不重握手。同属「成功路径被 Host/SDK 弄成永久失败」，机制不同
+ - vs published `mcp-cancellation-not-propagated`：取消生命周期；本文是会话级终态
+ - vs published `mcp-server-instance-reuse-cross-client-leak`：连接实例复用错路由；本文是单客户端 session id 僵死
+ - vs published `layered-retry-amplification`：重试层数；本文说明「分错类的 404」根本进不了该重试的桶
+ - vs published `durable-agent-execution`：进程死后续跑；本文是 MCP 会话死、Agent 进程仍活
+- **参考线索：**
+ - https://github.com/modelcontextprotocol/typescript-sdk/issues/1708 — **主证据（issue，open）**；v1 客户端 404 不清 session、不重 init
+ - https://github.com/modelcontextprotocol/typescript-sdk/issues/3056 — **主证据（issue，open）**；v2 `@modelcontextprotocol/client` 2.0.0 同缺口；长跑 harness 复现
+ - https://github.com/modelcontextprotocol/python-sdk/issues/1676 — **主证据（issue，open）**；Python 客户端 404 不重 initialize
+ - https://github.com/modelcontextprotocol/python-sdk/issues/3799 — 旁证（open）：404 错误不可区分；Temporal 把 `-32600` 当 non-retryable；逐字 `"Session terminated"` / `"Session not found"`
+ - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports — 规范旁证（Session Management 第 4 点 MUST 句，逐字）
+ - https://github.com/modelcontextprotocol/typescript-sdk/pull/2150 — 旁证（closed 未合）：曾实现 404 re-init，作者因 era 架构自关
+- **备注：** Gate PASS ready — Tue 2026-11-03 refill（读 #1708/#3056/#1676/#3799 正文 + 2025-11-25 transports Session Management 原文）。写稿禁令：不要写「SDK 已修复」——四条主/旁证 issue 均 open，#2150/#2466 未合；不要把 server 侧「该不该回 400 vs 404」(#389 / #1821) 写成本文主线——本文是**客户端**收到 404 之后；Temporal non-retryable 映射以 #3799 引用的 `ai-integrations` 提交为准，不扩展推断其他编排器；长跑 Rancher 场景出自 #3056 报告，写「有用户报告」；§4 `OPS-MCP-771` 是设计示例。P1。
+
+### [ready] 2026-11-03 | P1 | mcp-request-stream-id-key-collision
+- **工作标题：** `id: 1` 和 `"77"` 撞上 `77`：Streamable HTTP 响应流按 `str(id)` 键，合法请求也会串台
+- **失败面（MCP Streamable HTTP 服务端请求→响应流路由键，非客户端 session 僵死、非多 client 共享 `McpServer` 实例）：** 有状态 Streamable HTTP server 用「请求 id 的字符串」当 `_request_streams` / 路由表键 → 两类碰撞：(A) **同值复用**：并发两个请求都带 JSON-RPC `id: 1`（claude.ai 自定义连接器被报告为每请求都发 `id: 1`）→ 后到的 POST 覆盖先到的槽，B 收到 A 的 payload、A 挂死；(B) **类型强制**：规范允许 id 为 integer **或** string，`77` 与 `"77"` 是不同 id，但 `str(77)=="77"` → 两个合法在途请求共用一条响应流，取消其中一个会把响应打到另一个；(C) **哨兵键**：GET 流占位键 `"_GET_stream"` 与同名 string id 撞车 → 通知丢失、第二次 GET 本该 409 却 200（误判「客户端并发写坏了 / SSE 不稳 / 再加一把锁」）
+- **为何够深（非科普）：** 主线锁 **路由键必须对 JSON-RPC id 的类型与值都单射，且与内部哨兵分命名空间**。三点：(1) **协议违反要 fail-loud**：同 session 复用未完成的 id 违反「request ID MUST NOT have been previously used … within the same session」，但生产客户端会这么干——server 若静默覆盖，就把用户数据串到别的请求（#3060 生产事故：一用户的 tool 响应进了另一会话的请求）；(2) **`str(id)` 不是恒等嵌入**：即使双方都守「不复用」，integer/string 同文案仍撞（#3786 矩阵：12 个碰撞格全错路由，16 个对照全对）；(3) **内部哨兵进了同一张表**：`GET_STREAM_KEY="_GET_stream"` 与 wire id 同命名空间。对照：`stateless_http=True`（每请求新 transport）对 (A) 免疫。不是「JSON-RPC id 是什么」入门
+- **拟用案例 / 对照：**
+ 1. **BAD#1 同 id 覆盖（生产客户端触发）** python-sdk `#3060`（open，`bug` / v1+v2 / `P2`）：stateful streamable HTTP 上 12 并发皆 `id: 1` → OK=0 / SWAPPED=1 / TIMEOUT=11；unique id 对照 12/12 OK。机制：`request_id = str(message.root.id)` 后写入 `_request_streams`，后到覆盖先到；报告称 TypeScript server 有同类 `_requestToStreamMapping.set(message.id, …)` 无守卫（未在本轮独立复现 TS，只作旁证提及）。生产：claude.ai 自定义连接器被报告为每请求 `id: 1`
+ 2. **BAD#2 类型强制碰撞（合法 id）** python-sdk `#3786`（open，`bug` / v1+v2）：v1.30.0 / v2.3.0 多处 `str(message.id)`；并发 `77` 与 `"77"`，取消整数 `77` → 字符串 `"77"` 的 HTTP 流收到取消响应，自身 handler 未取消但响应丢失。矩阵：12 collision 全 misroute；16 control 全正确。与 #3060/#2655/#3137（同值复用）显式划界——本条是**不同** id 仍撞
+ 3. **BAD#3 GET 哨兵被 string id 顶掉** 同 `#3786`：请求 id `"_GET_stream"` 的 POST 注册覆盖 GET 流；下一条 server notification 丢失；第二次 GET 回 200 而非 409
+ 4. **GOOD：** 在途 id 冲突 → JSON-RPC `-32600` 拒绝覆盖（#3060 建议）或串行化同 id | 内部键用类型标签的单射编码（#3786：`json.dumps` 单独不够，因 `close_sse_stream` 仍吃原始 id）| GET 哨兵单独命名空间 | 指标：`request_stream_key_collision` / `duplicate_inflight_id_rejected`
+- **§4 业务线：** 同一多租户诊断会话总线 `sess_MCP-STREAM-09`（stateful Streamable HTTP）。**BAD v1**：连接器复用 `id: 1`，租户 A 的慢 `explain_cluster` 与租户 B 的快调用重叠 → B 的 UI 展示 A 的集群机密片段，A 一直转圈（回扣 §3.1 / #3060）。**BAD v2**：合规客户端对整数 id 与字符串 id 混用，取消其中一个 → 另一个丢响应（回扣 §3.2 / #3786）。**GOOD**：冲突 id fail-loud；内部键类型单射；哨兵隔离；`sess_MCP-STREAM-09` 上并发调用互不串台（回扣 §3.1–§3.3）
+- **§5 可注入失败点：**
+ 1. **注入：** 同 session 两个并发 POST，JSON-RPC id 均为 `1`，工具耗时不同 → **期望：** 后到的被拒或以确定策略串行；绝不以「成功」把 A 的 result 交给 B
+ 2. **注入：** 并发 id `77`（int）与 `"77"`（string），取消其中一个 → **期望：** 只影响被取消的那个；另一个完整返回
+ 3. **注入：** GET 流已开，再 POST id `"_GET_stream"` → **期望：** 不覆盖 GET 流；通知仍可达；策略内的第二次 GET 行为符合规范（如 409）
+- **领域标签：** MCP Server / Streamable HTTP / JSON-RPC Request Routing
+- **专题归属：** **MCP Server Runtime Boundaries**（续篇 #2：#1 `mcp-server-instance-reuse-cross-client-leak` = 多连接共享 server/transport 实例；本篇 = 单 session 内响应流路由键的单射性被 `str(id)` / 同值复用破坏）
+- **相关已发文 / 边界：**
+ - vs published `mcp-server-instance-reuse-cross-client-leak`：**必须划界**——那篇 = 多个客户端/`connect()` 覆盖 `_transport`；本文 = **同一 session** 内按 request id 找响应流。都表现为「响应去了别人那里」，键的层级不同
+ - vs ready `mcp-streamable-http-404-session-stuck`：那篇 = 会话死后客户端不恢复；本文 = 会话活着时路由键碰撞
+ - vs published `streaming-tool-call-index-collision`：那篇 = LLM 流式 tool_call 的 `index`；本文 = MCP JSON-RPC 请求 id。一句互链「按字符串键合并身份」
+ - vs published `tool-call-id-rewrite-cross-provider`：LLM 历史里的 tool call id 改写；不是 MCP 请求 id
+- **参考线索：**
+ - https://github.com/modelcontextprotocol/python-sdk/issues/3060 — **主证据（issue，open）**；同 id 覆盖；生产串台；OK/SWAPPED/TIMEOUT 矩阵；建议冲突时 `-32600`
+ - https://github.com/modelcontextprotocol/python-sdk/issues/3786 — **主证据（issue，open）**；int/string `str()` 碰撞 + `_GET_stream` 哨兵；12/16 矩阵
+ - https://github.com/modelcontextprotocol/python-sdk/issues/2655 — 旁证（同值复用族，#3786 划界引用）
+ - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports — 旁证：会话与流模型；id 唯一性句以 JSON-RPC / MCP 基础消息规范为准（写稿时核对「MUST NOT previously used」原文出处，不凭记忆）
+- **备注：** Gate PASS ready — Tue 2026-11-03 refill（读 #3060/#3786 正文与复现矩阵；#3786 对 #3060 的划界句已核）。写稿禁令：不要写「已修复」——两条均 open；「claude.ai 每请求 id:1」是 #3060 报告者说法，写成「报告称」，未独立抓包；TS server 同类模式是 #3060 作者陈述，本轮未读 TS 源码，最多一句「报告称」或干脆不写；不要把 #3060 与 #3786 写成同一个 bug——一篇里用 BAD#1/#2 分开；`stateless_http=True` 免疫的是同 id 覆盖族，不自动证明类型碰撞也免疫（#3786 复现是 stateful）；§4 串租户是设计示例，生产事故表述以 #3060 原文「one user's tool response delivered to a different conversation's request」为限。P1。
 
 ### [idea] 2026-10-08 | P2 | mcp-sampling-server-controlled-prompt
 - **工作标题：** MCP Sampling：Server 借 Client 的模型说话
