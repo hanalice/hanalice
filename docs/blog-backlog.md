@@ -422,7 +422,7 @@
   - https://github.com/livekit/agents/issues/5378 / https://github.com/livekit/agents/pull/5604 — 旁证（PR open 未合）：忽略 list_changed
 - **备注：** Gate PASS ready — Thu 2026-10-29 refill（读 #4828 / #4866 / #4896 / #4898 / #57473 正文与 API 状态；eca commit message；livekit #5378/#5604）。写稿禁令：允许引用 #4828 日志逐字超时 `Timed out while waiting for response to ClientRequest. Waited 30.0 seconds.`；并注明 PR #4866 正文写 “Fixes #4828 and #4896”。不要写「MCP 客户端都会死锁」——问题在 Host 把 await RPC 放进 SDK message_handler 的封装，直连 ClientSession 的路径在 #4828/#4896 里都成功；不要写 Agent Framework「仍必现」——#4866 已合 main（写稿前核 release 版号是否包含 7d23582e）；不要把 #4896 的 `resources/updated` 症状说成 #4866 回归测试覆盖的同一条；#57473 是 bot not_planned，不是维护者拒绝修复；#4898 未合，不能当 GOOD；livekit 忽略通知更靠近 progressive-disclosure，正文最多一句对照；§4 `ENG-4410` 是设计示例。P1。
 
-### [ready] 2026-11-03 | P1 | mcp-streamable-http-404-session-stuck
+### [published] 2026-11-11 | P1 | mcp-streamable-http-404-session-stuck
 - **工作标题：** 服务端一重启，客户端永远 404：Streamable HTTP 会话丢了也不重握手
 - **失败面（MCP Streamable HTTP 客户端会话生命周期 / 404 恢复层，非 OAuth、非取消、非 list_changed 重入）：** 有状态 Streamable HTTP server 丢了会话（进程重启、证书轮转、keepalive 超时、显式 eviction）→ 之后带旧 `MCP-Session-Id` 的 POST 一律 HTTP 404 → 规范要求客户端**清掉 session id、无 id 再发 `InitializeRequest`**；TS / Python SDK 客户端却只抛错、**不**清 id、**不**重握手 → 同一进程里之后每一次 `tools/call` 继续带僵死 session id，永远 404（误判「MCP server 挂了 / 网络抖 / 把超时调大 / 换 stdio」）
 - **为何够深（非科普）：** 主线锁 **「404 + 已带 session id」是会话终态信号，不是普通传输错误**。三层可拆：(1) **规范 MUST**：2025-11-25 transports Session Management 第 4 点原文：收到带 `MCP-Session-Id` 的请求的 HTTP 404 时，客户端 **MUST** 发不带 session id 的新 `InitializeRequest`；(2) **SDK 缺口**：TS v1 `#1708` / v2 `#3056` 的 POST `_send` 只对 401 做特殊处理，404 直接 `throw`，且 `_sessionId` 仅在成功 initialize 时写入、从不因 404 清除；Python `#1676` 同样只抛「session terminated」、不重初始化；(3) **Host 分类二次伤害**：丢失会话被包装成普通 `MCPError(-32600, …)`（空 body 回落 `"Session terminated"`；Python server body `"Session not found"`；TS server 用 `-32001`）→ Temporal MCP activity 把 `-32600` 当不可重试 → 本该「新连接再试」的调用被立刻判死（`#3799`）。不是「怎么配 Streamable HTTP」入门
@@ -452,6 +452,8 @@
  - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports — 规范旁证（Session Management 第 4 点 MUST 句，逐字）
  - https://github.com/modelcontextprotocol/typescript-sdk/pull/2150 — 旁证（closed 未合）：曾实现 404 re-init，作者因 era 架构自关
 - **备注：** Gate PASS ready — Tue 2026-11-03 refill（读 #1708/#3056/#1676/#3799 正文 + 2025-11-25 transports Session Management 原文）。写稿禁令：不要写「SDK 已修复」——四条主/旁证 issue 均 open，#2150/#2466 未合；不要把 server 侧「该不该回 400 vs 404」(#389 / #1821) 写成本文主线——本文是**客户端**收到 404 之后；Temporal non-retryable 映射以 #3799 引用的 `ai-integrations` 提交为准，不扩展推断其他编排器；长跑 Rancher 场景出自 #3056 报告，写「有用户报告」；§4 `OPS-MCP-771` 是设计示例。P1。
+
+- **已发文：** posts/mcp_streamable_http_404_session_stuck.md
 
 ### [ready] 2026-11-03 | P1 | mcp-request-stream-id-key-collision
 - **工作标题：** `id: 1` 和 `"77"` 撞上 `77`：Streamable HTTP 响应流按 `str(id)` 键，合法请求也会串台
@@ -766,3 +768,4 @@
 - 2026-10-30 Coordinator: Reviewer Approve → publish posts/mcp_progress_same_chunk_unknown_token.md (Agent Runtime Failure Handling #3); backlog mcp-progress-same-chunk-unknown-token → published. Ready left 2 (tool-approval-cross-run-transfer, mcp-list-changed-reload-blocks-receive-loop).
 - 2026-11-02 Coordinator: Reviewer Approve → publish posts/tool_approval_cross_run_transfer.md (Agent Session-State Integrity #5); backlog tool-approval-cross-run-transfer → published. Ready left 1 (mcp-list-changed-reload-blocks-receive-loop).
 - 2026-11-06 Coordinator: Reviewer Approve → publish posts/mcp_list_changed_reload_blocks_receive_loop.md (Agent Runtime Failure Handling #4); backlog mcp-list-changed-reload-blocks-receive-loop → published. Ready left 2 (mcp-streamable-http-404-session-stuck, mcp-request-stream-id-key-collision).
+- 2026-11-11 Coordinator: Reviewer Approve → publish posts/mcp_streamable_http_404_session_stuck.md (Agent Runtime Failure Handling #5); backlog mcp-streamable-http-404-session-stuck → published. Ready left 1 (mcp-request-stream-id-key-collision).
