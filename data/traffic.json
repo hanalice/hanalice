@@ -1,8 +1,8 @@
 {
   "repo": {
     "total_count": 420,
-    "count_14d": 28,
-    "uniques_14d": 7,
+    "count_14d": 27,
+    "uniques_14d": 6,
     "days": {
       "2026-09-04": {
         "count": 0,
@@ -275,13 +275,17 @@
       "2026-11-10": {
         "count": 0,
         "uniques": 0
+      },
+      "2026-11-11": {
+        "count": 0,
+        "uniques": 0
       }
     },
-    "updated_at": "2026-11-11T07:42:53Z"
+    "updated_at": "2026-11-12T08:14:28Z"
   },
   "site": {
     "count": 33,
     "count_unique": 33,
-    "updated_at": "2026-11-11T07:42:53Z"
+    "updated_at": "2026-11-12T08:14:28Z"
   }
 }
