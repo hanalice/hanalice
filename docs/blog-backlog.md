@@ -430,16 +430,16 @@
  1. **BAD#1 TS 客户端永不恢复（v1+v2）** typescript-sdk `#1708`（open，`ready for work` / `P2` / `fix proposed`）：`send()` / `_startOrAuthSse()` 遇 404 只抛 `StreamableHTTPError`，不清 `_sessionId`；后续 `send()` 继续带僵死 id → 永久 404。`#3056`（open，v1+v2）：在 `@modelcontextprotocol/client` 2.0.0 的 `dist/index.mjs` 核到同一缺口；长跑 harness 对接 nightly 重启的 Rancher MCP：第一分钟成功，之后整晚每次 `tools/call` 404，只能关 transport / 重启进程。未合前作：`#2150`（作者自关，等 era 架构设计决定）、`#2466`（作者撤回）
  2. **BAD#2 Python 客户端同样不重握手** python-sdk `#1676`（open，`ready for work` / `P2` / `improves spec compliance`）：404 路径只发 session terminated 错误（指向 `streamable_http.py`），不发无 session 的新 `InitializeRequest`
  3. **BAD#3 错误类型不可区分 → 编排层不重试** python-sdk `#3799`（open）：同一 404 因 body 不同变成 `-32600 "Session terminated"` / `-32600 "Session not found"` / `-32001 "Session not found"`；与普通 invalid request 的 `-32600` 同型。Temporal `ai-integrations` MCP activity 把 `-32600` 标成 non-retryable → server 重启后的合法调用被立刻放弃
- 4. **GOOD：** 404 + 请求曾带 session id → 清本地 session id → 无 id `InitializeRequest` → 有界地重放失败请求一次（规范 MUST；`#1708`/`#3056`/`#1676` 方向）| 抛出可类型区分的 `SessionNotFoundError`（`#3799`），Host / Temporal 按「会话丢失」重连，不当普通 `-32600` | 指标：`session_404_reinit_count` vs `session_404_unrecovered`
+ 4. **GOOD：** 404 + 请求曾带 session id → 清本地 session id → 无 id 再发 `InitializeRequest`（这是 2025-11-25 transports Session Management 第 4 点的规范 **MUST**；`#1708`/`#3056`/`#1676`）| **有界重放失败请求一次是条件性/推荐设计，不是规范 MUST**（正文已按此写：只读、可跨会话重算的查询可有界重放；写操作另证幂等；依赖旧会话游标/句柄的请求不得盲目重放。`#3056` 期望行为与未合 PR `#2150`/`#2466` 是实现方向，#2466 正文即有 pagination continuation 不重放的划分）| Host 保留可类型区分的会话丢失信号（#3799 的 `SessionNotFoundError` 是提案，不是已发布 SDK 接口），Host / Temporal 按「会话丢失」重连，不当普通 `-32600` | 指标：`session_404_reinit_count` vs `session_404_unrecovered`
 - **§4 业务线：** 同一长跑运维 agent `OPS-MCP-771` 挂着有状态 Rancher MCP（Streamable HTTP）。**BAD v1**：夜间证书轮转杀了 server 会话 → Host 仍持旧 `MCP-Session-Id` → 之后每个 `list_clusters` 404，值班以为 Rancher 挂了（回扣 §3.1–§3.2）。**BAD v2**：补了 retry，但错误仍是 `-32600`，Temporal activity 直接 FAIL、不换连接（回扣 §3.3）。**GOOD**：404 清 session → 重 `initialize` → 重放一次；`SessionNotFoundError` 走「新会话重试」分支；`OPS-MCP-771` 在重启后第一分钟内恢复（回扣 §3.1–§3.3）
 - **§5 可注入失败点：**
- 1. **注入：** 已 initialize 的客户端上，server 对该 `MCP-Session-Id` 回 HTTP 404 → **期望：** 客户端清 session id；下一次成功 initialize；失败请求有界重放一次
+ 1. **注入：** 已 initialize 的客户端上，server 对该 `MCP-Session-Id` 回 HTTP 404 → **期望（MUST）：** 客户端清 session id，并发送不带 session id 的新 `InitializeRequest`，随后会话可用。**期望（推荐、非 MUST）：** 对可安全重试的失败请求有界重放至多一次；不可安全重放的请求（如依赖旧会话游标的 pagination continuation，或未证明幂等的写操作）不得自动重放
  2. **注入：** 404 后立刻再发 `tools/call`（不经进程重启）→ **期望：** 不再带旧 session id；不是连串 404
  3. **注入：** Host / durable worker 收到会话丢失错误 → **期望：** 按可重试的会话丢失处理，不与普通 `-32600` invalid request 走同一条 non-retry 路径
 - **领域标签：** MCP Client / Streamable HTTP / Session Lifecycle
 - **专题归属：** **Agent Runtime Failure Handling**（续篇 #5：#1 分层重试；#2 取消未下发；#3 progress 分发顺序；#4 list_changed 重入；本篇 = 传输层会话终态信号被当成普通错误，成功路径永久卡死）
 - **相关已发文 / 边界：**
- - vs ready `mcp-list-changed-reload-blocks-receive-loop`：那篇 = 通知 handler 重入卡死本轮 call；本文 = 会话已死后客户端不重握手。同属「成功路径被 Host/SDK 弄成永久失败」，机制不同
+ - vs published `mcp-list-changed-reload-blocks-receive-loop`：那篇 = 通知 handler 重入卡死本轮 call；本文 = 会话已死后客户端不重握手。同属「成功路径被 Host/SDK 弄成永久失败」，机制不同
  - vs published `mcp-cancellation-not-propagated`：取消生命周期；本文是会话级终态
  - vs published `mcp-server-instance-reuse-cross-client-leak`：连接实例复用错路由；本文是单客户端 session id 僵死
  - vs published `layered-retry-amplification`：重试层数；本文说明「分错类的 404」根本进不了该重试的桶
@@ -451,7 +451,7 @@
  - https://github.com/modelcontextprotocol/python-sdk/issues/3799 — 旁证（open）：404 错误不可区分；Temporal 把 `-32600` 当 non-retryable；逐字 `"Session terminated"` / `"Session not found"`
  - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports — 规范旁证（Session Management 第 4 点 MUST 句，逐字）
  - https://github.com/modelcontextprotocol/typescript-sdk/pull/2150 — 旁证（closed 未合）：曾实现 404 re-init，作者因 era 架构自关
-- **备注：** Gate PASS ready — Tue 2026-11-03 refill（读 #1708/#3056/#1676/#3799 正文 + 2025-11-25 transports Session Management 原文）。写稿禁令：不要写「SDK 已修复」——四条主/旁证 issue 均 open，#2150/#2466 未合；不要把 server 侧「该不该回 400 vs 404」(#389 / #1821) 写成本文主线——本文是**客户端**收到 404 之后；Temporal non-retryable 映射以 #3799 引用的 `ai-integrations` 提交为准，不扩展推断其他编排器；长跑 Rancher 场景出自 #3056 报告，写「有用户报告」；§4 `OPS-MCP-771` 是设计示例。P1。
+- **备注：** Gate PASS ready — Tue 2026-11-03 refill（读 #1708/#3056/#1676/#3799 正文 + 2025-11-25 transports Session Management 原文）。写稿禁令：不要写「SDK 已修复」——四条主/旁证 issue 均 open，#2150/#2466 未合；不要把 server 侧「该不该回 400 vs 404」(#389 / #1821) 写成本文主线——本文是**客户端**收到 404 之后；Temporal non-retryable 映射以 #3799 引用的 `ai-integrations` 提交为准，不扩展推断其他编排器；长跑 Rancher 场景出自 #3056 报告，写「有用户报告」；§4 `OPS-MCP-771` 是设计示例。P1。**Scout 2026-11-12（published 后对齐，不回改 posts/）：** 正文已把「规范 MUST：清 session id + 无 id 发 InitializeRequest」与「有界重放失败请求一次」分开，后者不是规范要求。本条目原先 GOOD / §5 把两者绑成「规范 MUST」，以正文为准并已改 backlog。list-changed 边界改为 vs published。#1708/#3056/#1676/#3799 本轮仍 open（`state_reason=null`）；#2150/#2466 仍 closed 未合。#3799 的 `SessionNotFoundError` 按正文写「提案」，不写成已发布 SDK 接口。
 
 - **已发文：** posts/mcp_streamable_http_404_session_stuck.md
 
@@ -463,7 +463,8 @@
  1. **BAD#1 同 id 覆盖（生产客户端触发）** python-sdk `#3060`（open，`bug` / v1+v2 / `P2`）：stateful streamable HTTP 上 12 并发皆 `id: 1` → OK=0 / SWAPPED=1 / TIMEOUT=11；unique id 对照 12/12 OK。机制：`request_id = str(message.root.id)` 后写入 `_request_streams`，后到覆盖先到；报告称 TypeScript server 有同类 `_requestToStreamMapping.set(message.id, …)` 无守卫（未在本轮独立复现 TS，只作旁证提及）。生产：claude.ai 自定义连接器被报告为每请求 `id: 1`
  2. **BAD#2 类型强制碰撞（合法 id）** python-sdk `#3786`（open，`bug` / v1+v2）：v1.30.0 / v2.3.0 多处 `str(message.id)`；并发 `77` 与 `"77"`，取消整数 `77` → 字符串 `"77"` 的 HTTP 流收到取消响应，自身 handler 未取消但响应丢失。矩阵：12 collision 全 misroute；16 control 全正确。与 #3060/#2655/#3137（同值复用）显式划界——本条是**不同** id 仍撞
  3. **BAD#3 GET 哨兵被 string id 顶掉** 同 `#3786`：请求 id `"_GET_stream"` 的 POST 注册覆盖 GET 流；下一条 server notification 丢失；第二次 GET 回 200 而非 409
- 4. **GOOD：** 在途 id 冲突 → JSON-RPC `-32600` 拒绝覆盖（#3060 建议）或串行化同 id | 内部键用类型标签的单射编码（#3786：`json.dumps` 单独不够，因 `close_sse_stream` 仍吃原始 id）| GET 哨兵单独命名空间 | 指标：`request_stream_key_collision` / `duplicate_inflight_id_rejected`
+ 4. **旁证（同一类型强制家族、不同表）：** python-sdk `#3807`（open，`bug` / v2；2026-11-10 折入）：`JSONRPCDispatcher` 用 `_in_flight[coerce_request_id(req.id)]` 做键，stdio 上并发 `"9007199254740991"` 与 `9007199254740991` 时，取消前者会取消后者——后者无响应，前者跑完且无法再取消。issue 正文明确与 #3786（HTTP 流键 `str(id)`）划界，且与 #3060/#2655（同值复用）划界；不要写成同一个 bug
+ 5. **GOOD：** 在途 id 冲突 → JSON-RPC `-32600` 拒绝覆盖（#3060 建议）或串行化同 id | 内部键用类型标签的单射编码（#3786：`json.dumps` 单独不够，因 `close_sse_stream` 仍吃原始 id）| GET 哨兵单独命名空间 | 指标：`request_stream_key_collision` / `duplicate_inflight_id_rejected`
 - **§4 业务线：** 同一多租户诊断会话总线 `sess_MCP-STREAM-09`（stateful Streamable HTTP）。**BAD v1**：连接器复用 `id: 1`，租户 A 的慢 `explain_cluster` 与租户 B 的快调用重叠 → B 的 UI 展示 A 的集群机密片段，A 一直转圈（回扣 §3.1 / #3060）。**BAD v2**：合规客户端对整数 id 与字符串 id 混用，取消其中一个 → 另一个丢响应（回扣 §3.2 / #3786）。**GOOD**：冲突 id fail-loud；内部键类型单射；哨兵隔离；`sess_MCP-STREAM-09` 上并发调用互不串台（回扣 §3.1–§3.3）
 - **§5 可注入失败点：**
  1. **注入：** 同 session 两个并发 POST，JSON-RPC id 均为 `1`，工具耗时不同 → **期望：** 后到的被拒或以确定策略串行；绝不以「成功」把 A 的 result 交给 B
@@ -473,24 +474,82 @@
 - **专题归属：** **MCP Server Runtime Boundaries**（续篇 #2：#1 `mcp-server-instance-reuse-cross-client-leak` = 多连接共享 server/transport 实例；本篇 = 单 session 内响应流路由键的单射性被 `str(id)` / 同值复用破坏）
 - **相关已发文 / 边界：**
  - vs published `mcp-server-instance-reuse-cross-client-leak`：**必须划界**——那篇 = 多个客户端/`connect()` 覆盖 `_transport`；本文 = **同一 session** 内按 request id 找响应流。都表现为「响应去了别人那里」，键的层级不同
- - vs ready `mcp-streamable-http-404-session-stuck`：那篇 = 会话死后客户端不恢复；本文 = 会话活着时路由键碰撞
+ - vs published `mcp-streamable-http-404-session-stuck`：那篇 = 会话死后客户端不恢复；本文 = 会话活着时路由键碰撞
  - vs published `streaming-tool-call-index-collision`：那篇 = LLM 流式 tool_call 的 `index`；本文 = MCP JSON-RPC 请求 id。一句互链「按字符串键合并身份」
  - vs published `tool-call-id-rewrite-cross-provider`：LLM 历史里的 tool call id 改写；不是 MCP 请求 id
 - **参考线索：**
  - https://github.com/modelcontextprotocol/python-sdk/issues/3060 — **主证据（issue，open）**；同 id 覆盖；生产串台；OK/SWAPPED/TIMEOUT 矩阵；建议冲突时 `-32600`
  - https://github.com/modelcontextprotocol/python-sdk/issues/3786 — **主证据（issue，open）**；int/string `str()` 碰撞 + `_GET_stream` 哨兵；12/16 矩阵
  - https://github.com/modelcontextprotocol/python-sdk/issues/2655 — 旁证（同值复用族，#3786 划界引用）
+ - https://github.com/modelcontextprotocol/python-sdk/issues/3807 — 旁证（open；Tue 2026-11-10 折入）：取消路径 `_in_flight` + `coerce_request_id`，stdio 可复现；与 #3786 不同代码路径
  - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports — 旁证：会话与流模型；id 唯一性句以 JSON-RPC / MCP 基础消息规范为准（写稿时核对「MUST NOT previously used」原文出处，不凭记忆）
-- **备注：** Gate PASS ready — Tue 2026-11-03 refill（读 #3060/#3786 正文与复现矩阵；#3786 对 #3060 的划界句已核）。写稿禁令：不要写「已修复」——两条均 open；「claude.ai 每请求 id:1」是 #3060 报告者说法，写成「报告称」，未独立抓包；TS server 同类模式是 #3060 作者陈述，本轮未读 TS 源码，最多一句「报告称」或干脆不写；不要把 #3060 与 #3786 写成同一个 bug——一篇里用 BAD#1/#2 分开；`stateless_http=True` 免疫的是同 id 覆盖族，不自动证明类型碰撞也免疫（#3786 复现是 stateful）；§4 串租户是设计示例，生产事故表述以 #3060 原文「one user's tool response delivered to a different conversation's request」为限。P1。
+- **备注：** Gate PASS ready — Tue 2026-11-03 refill（读 #3060/#3786 正文与复现矩阵；#3786 对 #3060 的划界句已核）。**Tue 2026-11-10 复核：PASS 保持 ready。** API：#3060 open（`bug` / v1+v2 / `P2`，`state_reason=null`，updated 2026-08-18）；#3786 open（`bug` / v1+v2，updated 2026-11-02）；#2655 仍 open。本轮未见已合修复 PR。折入 #3807（open / v2，updated 2026-11-04）：取消槽类型强制，stdio 可复现。写稿禁令：不要写「已修复」——#3060/#3786/#3807 均 open；「claude.ai 每请求 id:1」是 #3060 报告者说法，写成「报告称」，未独立抓包；TS server 同类模式是 #3060 作者陈述，本轮未读 TS 源码，最多一句「报告称」或干脆不写；不要把 #3060 与 #3786 写成同一个 bug——一篇里用 BAD#1/#2 分开；不要把 #3807 写成 #3786 的同一处修复——两者是不同表（`_in_flight`/`coerce_request_id` vs `_request_streams`/`str(id)`），一篇里只作对照；`stateless_http=True` 免疫的是同 id 覆盖族，不自动证明类型碰撞也免疫（#3786 复现是 stateful）；§4 串租户是设计示例，生产事故表述以 #3060 原文「one user's tool response delivered to a different conversation's request」为限。P1。**Thu 2026-11-12 复核：PASS 保持 ready。** API：#3060/#3786/#3807/#2655 仍 open（`state_reason=null`）；本轮未见已合修复 PR。#2655 于 2026-11-11 有新评论在 main v2 复现同 id 覆盖（慢工具被挂起），不是修复、也没有合入的 PR。
 
-### [idea] 2026-10-08 | P2 | mcp-sampling-server-controlled-prompt
+### [ready] 2026-11-10 | P1 | mcp-list-pagination-cursor-not-drained
+- **工作标题：** `nextCursor` 来了也不跟：tools/list 只拿第一页，目录看起来完整，后面的工具根本不存在
+- **失败面（MCP Host / Client 目录分页排空层，非 list_changed 刷新策略、非 tool result 截断、非 output schema 校验）：** 服务端按规范给 `tools/list`（以及 resources/prompts）回第一页 + `nextCursor` → Host / SDK 聚合器只发一次 list、丢掉游标，或虽循环却把「重复的不透明 cursor」当成结束并删掉 `nextCursor` → 后续页工具从未注册 → 模型以为目录完整，调用页 2 工具得到 "No such tool available"（误判「网关没暴露这些工具 / 再写一条 search / 把 page size 调大就行」）
+- **为何够深（非科普）：** 主线锁 **「第一次 list 成功 ≠ 目录完整」**。三层可拆：(1) **单页聚合**：Python SDK `ClientSessionGroup._aggregate_components()` 对每个 `list_*()` 只调用一次、忽略 `nextCursor`，后页工具无法经 `group.call_tool()` 到达（#3792；#2556 指出 `Client.list_tools()` 文档也不提分页，Claude Code / Cursor / Inspector CLI 都曾按「一次 list 即全部」接入）；(2) **排空了仍会静默截断**：TS SDK `_listAllPages` 曾用 `seen` 集合在 cursor 重复时停走，再 `delete acc.nextCursor`，截断结果与完整目录无法区分——而 2026-07-28 规范要求客户端 MUST 把 cursor 当不透明 token，「Don't make any determination based on cursor value other than whether a non-null value was provided（空字符串是合法 cursor，MUST NOT 当结束）」（#2735，已由 PR #2886 合入，`@modelcontextprotocol/client` 2.2.0）；(3) **失败伪装**：网关/动态工具在第一页之后的名字会在搜索工具里「看得到」却调用不了（#39586 报告的 `x_amz_bedrock_agentcore_search`）。GOOD：循环直到响应**省略** `nextCursor`；空字符串与重复 cursor 不是结束条件；硬上限须 fail-loud（如 `ListPaginationExceeded`）；续页失败不得发布半份目录。不是「什么是 tools/list」入门
+- **拟用案例 / 对照：**
+ 1. **BAD#1 聚合器只取第一页（Python SDK ClientSessionGroup）** `#3792`（open，`bug` / v1+v2）：进程内 server 第一页工具 `first` + `next_cursor="page-2"`，第二页 `second` 无续页；`group.connect_with_session(...)` 后 `group.tools` 只有 `first`，server 只收到一次 listing。复现于 main `d7845c07`。同仓库 `#2556`（open，`enhancement` / P3）记录同一形状：AWS Bedrock AgentCore Gateway 31 个工具分两页（page 0 = 14 + `nextCursor`，page 1 = 17），Claude Code / Cursor / Inspector CLI 都只拿到 14；提出 `list_all_*` 排空辅助。修复 PR `#3793` / `#3021` / `#3083` / `#2441` 均 closed **未合**
+ 2. **BAD#2 排空循环把合法重复 cursor 当结束（TS SDK）** `#2735`（closed **completed**；fix PR `#2886` merged 2026-09-28，commit `ef39308`，随 `@modelcontextprotocol/client` 2.2.0 发布）：服务端用稳定 cursor `""` 自己记账分页时，`_listAllPages` 的 `seen` 在第二页停下并删除 `nextCursor`；复现输出 `tools: alpha, beta`（缺 `gamma`），`nextCursor: undefined`。#2736 / #2741 未合；以已合的 #2886 为准
+ 3. **BAD#3 Host 生产：分页网关的页 2 工具调用失败（Claude Code / Desktop 报告）** `#39586`（closed **duplicate** → `#59538`，locked）：AgentCore 按 30/页分页，48 个工具只注册前 30；服务端日志 verbatim `tool_count: 30` / `has_next_cursor: true`，全程只有一次 `tools/list`。`#59538`（closed **completed**，同时带 `duplicate` 标签，bot 关闭）在 FastMCP `list_page_size=20`、`list_changed` 之后重拉仍只读第 1 页（29 个工具中页 2 的 9 个不可用），正文错误串 `"Error: No such tool available"` / `"No such tool available"`。claude[bot] 在 #39586 写过「duplicate of #59538, which was fixed as of version 2.1.144」——**本轮未独立核实 changelog / commit**，不得写成已核实修复。Desktop `#66537` 以 `not_planned` + `invalid`（错仓库）关闭，不是「已修复」
+ 4. **GOOD：** 循环至响应省略 `nextCursor`（不是「cursor 重复/为空字符串」）| 续页失败先不发布半份目录，并检测 cursor 环（#3792 提议）| 硬上限 fail-loud（#2886 的 `listMaxPages` → `ListPaginationExceeded`）| 指标：`list_pages_fetched` / `list_truncated_without_cursor` / 注册工具数 vs 服务端声明数
+- **§4 业务线：** 同一条企业网关会话 `GW-CATALOG-318`（AgentCore 风格，tools/list 分页，多后端目标）。**BAD v1**：Host 经 `ClientSessionGroup` 接入，只注册第一页；模型要调页 2 的 `explain_cluster`，得到 "No such tool available"，值班以为网关没挂这个工具（回扣 §3.1 / #3792/#2556）。**BAD v2**：换成会跟 cursor 的客户端后，服务端用稳定空字符串 cursor 记账，聚合在第二页静默停走，目录仍缺页且看起来完整（回扣 §3.2 / #2735）。**GOOD**：排空至 `nextCursor` 缺席；重复/空 cursor 继续走；撞上限 fail-loud；`GW-CATALOG-318` 第一轮就能调到最后一页的工具（回扣 §3.1–§3.3）
+- **§5 可注入失败点：**
+ 1. **注入：** mock server 第一页带 `nextCursor`，第二页给出另一工具且不再带 cursor → **期望：** 客户端/Host 注册两页全部工具；对页 2 工具的 `tools/call` 成功，而不是 "No such tool available"
+ 2. **注入：** 服务端中间页重复同一不透明 cursor（含 `""`），最后一页省略 `nextCursor` → **期望：** 全部页被聚合；结果上不得残留 `nextCursor` 来把截断伪装成完整
+ 3. **注入：** 续页请求失败或游标循环 → **期望：** 不把半份目录标成完整；硬上限以明确错误失败，而不是短列表
+- **领域标签：** MCP Host / Client Discovery · Pagination Cursor Drain · Tool Catalog Completeness
+- **专题归属：** **MCP Host Discovery**（续篇 #2：#1 `mcp-progressive-disclosure` = 召回策略 / list_changed 不刷新 / 缓存陈旧；本篇 = 第一次 list 就未排空分页，或排空循环把合法不透明 cursor 当成结束）
+- **相关已发文 / 边界：**
+ - vs published `mcp-progressive-disclosure`：**必须划界**——那篇 = 发现策略与 list_changed 未刷新导致目录陈旧；本文 = 单次 list 的分页游标没跟完，目录被当成完整。互链一句「通知≠刷新」后立刻转到 cursor drain，不重讲 Tool Search
+ - vs published `mcp-list-changed-reload-blocks-receive-loop`：那篇 = 刷新动作重入卡死本轮 call；本文即使刷新成功，若只拉第一页，页 2 仍然缺失（#59538 报告过 list_changed 后重拉仍只读 page 1）
+ - vs published `silent-tool-result-truncation`：那篇截的是**工具结果**载荷；本文缺的是**目录条目**
+ - vs published `mcp-output-schema-validation-swallows-tool-errors`：结果校验换掉错误内容；本文工具根本未被 Host 注册
+ - vs published `mcp-streamable-http-404-session-stuck` / ready `mcp-request-stream-id-key-collision`：传输会话恢复与请求 id 路由；不是目录分页
+- **参考线索：**
+ - https://github.com/modelcontextprotocol/python-sdk/issues/3792 — **主证据（issue，open）**；ClientSessionGroup 忽略 `next_cursor`；进程内两页复现
+ - https://github.com/modelcontextprotocol/typescript-sdk/issues/2735 — **主证据（issue，closed completed）**；重复不透明 cursor 静默截断。fix PR https://github.com/modelcontextprotocol/typescript-sdk/pull/2886 merged 2026-09-28，commit `ef39308`，写入 `@modelcontextprotocol/client` 2.2.0 changelog
+ - https://github.com/modelcontextprotocol/python-sdk/issues/2556 — **主证据（issue，open）**；Bedrock Gateway 31 工具只见 14；点名 Claude Code / Cursor / Inspector CLI；关联 claude-code #39586
+ - https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/pagination — 规范旁证：Clients SHOULD 把缺失的 `nextCursor` 当结束；MUST 把 cursor 当不透明 token，空字符串 MUST NOT 当结束
+ - https://github.com/anthropics/claude-code/issues/39586 / https://github.com/anthropics/claude-code/issues/59538 — 旁证（Host 生产报告；关闭状态见备注，勿当「当前 CLI 必现」）
+- **备注：** Gate PASS ready — Tue 2026-11-10 refill（读 #3792/#2556/#2735 正文与 API；#2886 `merged_at` + 2.2.0 changelog 中的 `ef39308`；#39586/#59538/#66537 关闭链；2026-07-28 pagination 原文）。写稿禁令：不要写「Python SDK 已修复」——#3792/#2556 仍 open，#3793/#3021/#3083/#2441 均未合；TS 的重复 cursor 截断以 #2886 已合为准，写「2.2.0+ 的 `_listAllPages` 已改」，不要写「TS 现在仍会因重复 cursor 静默截断」（写稿前再核发行版是否包含 `ef39308`）；不要把 claude[bot] 在 #39586 的「fixed as of version 2.1.144」写成已核实官方修复——#59538 本身带 `duplicate` 标签、由 bot 关闭，本轮未见维护者给出的 changelog/commit；Desktop #66537 是 `not_planned` + `invalid`（错仓库），只能写「有用户在 2026-06 报告 Desktop 仍复现」，不要写成当前必现；#2556 的 Cursor / Inspector CLI 是该 issue 报告，写成「报告称」，本轮未独立打开 Cursor 源码；「31 工具 / 14 可见」与「48 工具 / 前 30」分别出自 #2556 与 #39586，不要混写成同一组数字；§4 `GW-CATALOG-318` 是设计示例。P1。**Thu 2026-11-12 复核：PASS 保持 ready。** #3792/#2556 仍 open；#3793 closed 未合（`merged_at=null`，auto-closed missing-issue-link）；#2735 仍 closed completed，#2886 仍 merged（`merged_at=2026-09-28T16:44:23Z`，merge commit `ef39308`）。
+
+### [ready] 2026-11-10 | P1 | mcp-oauth-rotating-refresh-token-race
+- **工作标题：** 两个 401 一起刷新，旋转 refresh token 把整条授权链吊销：并发 refresh 不是可重试的小错误
+- **失败面（MCP OAuth 客户端/代理的 refresh 单飞与旋转语义，非 Identity≠Audience、非 consent 绑定、非 Streamable HTTP 会话 404）：** 同一连接上多个请求同时收到 401（或同时打 `/token`）→ 各方各自用**同一颗** refresh token 去换票 → 授权服务器按旋转/重放检测（RFC 6819 5.2.2.3 / OAuth 2.1）接受第一笔、拒绝第二笔并常吊销整组 token → 客户端再把 `invalid_grant` 直接抛给调用方、或对已拒绝的 refresh token 再打一次 → 会话永久不可用，直到用户重新授权（误判「IdP 挂了 / 再重试一遍 token / 把超时调大」）
+- **为何够深（非科普）：** 主线锁 **「旋转 refresh token 下，并发 refresh 是授权族毁灭，不是瞬时 401」**。三层可拆：(1) **客户端未单飞**：TS SDK `auth()` 对同一 provider 没有 in-flight 去重，并行 401 各发一次 `refresh_token` grant；报告称 Atlassian / Asana 等旋转策略会触发家族吊销，verbatim `InvalidGrantError: Invalid refresh token`（#1760）；#2915 在 `@modelcontextprotocol/client` 2.2.0 上复现「真实并发约 12 次里 2 次、两笔 refresh 直打 10/10」；(2) **失败后不会重新授权**：`auth()` 把 `invalid_grant` 当可恢复，但 `invalidateCredentials` 可选——未实现时 retry 仍拿同一颗已被拒绝的 refresh token，警告写 "retrying authorization" 却永远走不到授权（#2915 / 未合 PR #2924）；(3) **代理侧对称**：FastMCP `OAuthProxy` 对**客户端面向**的 refresh token 旋转后立即作废、无宽限期，并发 `/token` 第二笔 `401 invalid_grant`，会话永久丢失；上游（如 Google）token 已有 grace/重读，客户端面向 token 没有（#4901）。GOOD：同一 provider 的 refresh 单飞、后来者等待并复用结果；`invalid_grant` 后重读已存储 token，仍是旧 token 则作废并走完整授权，而不是再打同一颗；代理侧对刚刚旋转掉的 token 在短窗内**重放同一对新票**，而不是再铸一代。不是「怎么配 MCP OAuth」入门
+- **拟用案例 / 对照：**
+ 1. **BAD#1 客户端并发 refresh 吊销 token 族（TS SDK）** `#1760`（open，`bug` / `ready for work` / `P2` / `auth` / v1+v2 / `fix proposed`）：两个并行请求各自 `auth()`，同一 refresh token 打两次 token endpoint。`#2915`（open，v1+v2）补上同一机制，并指出第二笔 `invalid_grant` 被重新抛出，后续请求也失败。修复 PR `#1813` / `#2757`（去重并发 refresh）仍 **open 未合**
+ 2. **BAD#2 `invalid_grant` 之后还用同一颗 refresh token 再刷（恢复路径）** `#2915` + 未合 PR `#2924`（open）：`invalidateCredentials` 未实现时，retry 再次 refresh，调用方看到 `OAuthError: invalid_grant` / 测试里的 `OAuthError: Refresh token expired`，到不了 `redirectToAuthorization()`。#2924 把此路径称为 #2915 的「second half」，并发半交给 #1760/#2757
+ 3. **BAD#3 代理旋转无宽限期（FastMCP OAuthProxy）** `#4901`（open，`bug` / `auth`）：生产日志模式 `POST /token (refresh_token=X) -> 200 OK`（旋转为 Y 并作废 X），随后 `POST /token (refresh_token=X) -> 401 invalid_grant "already rotated"`；报告称在其流量下「一天可出现数十次」。fix PR `#4911`（draft，closed **未合**，`merged_at=null`）与 `#5037`（closed **未合**）都还没有进主线
+ 4. **GOOD：** 同一 provider 的 refresh 单飞，并发调用复用第一次结果（#1760/#2915/#2757）| `invalid_grant` 后重读存储；仍是被拒绝的那颗 token 则作废并走完整授权，而不是再 refresh（#2924）| 代理对刚旋转的旧 token 短窗重放**同一对**新票，不新铸一代（#4901 提议）| 指标：`refresh_singleflight_wait` / `refresh_replay_detected` / `invalid_grant_reauth`
+- **§4 业务线：** 同一条 Atlassian 风格的 MCP 连接 `CONN-OAUTH-209`（旋转 refresh token，Host 并行 `tools/call`）。**BAD v1**：access token 过期，两个 in-flight 请求同时 401 → 两次 refresh → 第二笔吊销整组 token，连接再也起不来，值班以为 IdP 故障（回扣 §3.1 / #1760/#2915）。**BAD v2**：捕获到 `invalid_grant` 后「重试授权」，却再次提交同一颗 refresh token，仍然进不了登录（回扣 §3.2 / #2924）。**GOOD**：两次 401 共享一次 refresh；即便仍收到 `invalid_grant` 也改走完整授权；`CONN-OAUTH-209` 不必让用户重新点一遍登录就能恢复，或至少能重新登录而不是死在重放上（回扣 §3.1–§3.3）
+- **§5 可注入失败点：**
+ 1. **注入：** 旋转 refresh 的授权服务器上，两个并行请求在 access token 过期后同时 401 → **期望：** 只发生一次 refresh；两个调用都用新 access token 成功，而不是一笔成功一笔 `invalid_grant` 并把家族吊销
+ 2. **注入：** 一次 refresh 已返回 `invalid_grant`，provider 未实现 `invalidateCredentials` → **期望：** 客户端不再用同一颗 refresh token 打 token endpoint，而是作废并进入新的授权；会话可恢复
+ 3. **注入：** OAuth 代理上，成功旋转之后的重复 `/token`（重试或第二张标签页仍持旧 refresh token）→ **期望：** 短窗内重放同一对新票，而不是 `401 invalid_grant` 永久丢会话
+- **领域标签：** MCP Authorization / OAuth Token Lifecycle · Refresh Token Rotation · Single-Flight
+- **专题归属：** **MCP Auth Token Lifecycle**（新系列 #1：与已发 `mcp-auth-identity-not-intent`（Identity≠Audience）、`mcp-consent-binding-confused-deputy`（consent 回调绑定）相邻，但本篇是 refresh 旋转与并发单飞，不是身份/受众或 consent 绑定）
+- **相关已发文 / 边界：**
+ - vs published `mcp-auth-identity-not-intent`：那篇 = token 代表的身份不是资源受众；本文 = 合法 token 在并发 refresh 下被旋转策略吊销。不重讲 audience / confused identity
+ - vs published `mcp-consent-binding-confused-deputy`：consent 与 callback 绑定；本文发生在已授权之后的 refresh
+ - vs published `mcp-streamable-http-404-session-stuck`：那篇是 MCP **会话 id** 的 404 恢复；本文是 **OAuth refresh token**。都表现为「之后每一次调用都失败」，层不同
+ - vs published `layered-retry-amplification`：分层重试会把这次并发 refresh 放大，但根因是旋转语义，不是重试层数本身
+- **参考线索：**
+ - https://github.com/modelcontextprotocol/typescript-sdk/issues/1760 — **主证据（issue，open）**；并发 `auth()` + 旋转 refresh；verbatim `InvalidGrantError: Invalid refresh token`
+ - https://github.com/modelcontextprotocol/typescript-sdk/issues/2915 — **主证据（issue，open）**；同一客户端缺口 + `invalid_grant` 被重新抛出；报告 2/12 与 10/10 复现率。未合 PR https://github.com/modelcontextprotocol/typescript-sdk/pull/2757（并发单飞）、https://github.com/modelcontextprotocol/typescript-sdk/pull/2924（停止重发被拒 refresh token）
+ - https://github.com/PrefectHQ/fastmcp/issues/4901 — **主证据（issue，open）**；OAuthProxy 客户端面向 token 无 grace；生产并发 `/token` → `401 invalid_grant`。fix PR #4911 / #5037 均 closed **未合**
+- **备注：** Gate PASS ready — Tue 2026-11-10 refill（读 #1760/#2915/#4901 正文与 API 状态；#1813/#2757/#2924 仍 open 未合；#4911 draft closed 未合、#5037 closed 未合，`merged_at=null`）。写稿禁令：不要写「SDK / FastMCP 已修复」——三条主证据均 open，相关 PR 均未合；#1760 的 Atlassian / Asana 是报告举例，写成「报告称」；#2915 的 2/12 与 10/10 是该 issue 作者测试，不要改写成论文数据或「必现」；#4901 「一天数十次」是报告者生产观察，写「有用户报告」；#4901 日志里的 `"already rotated"` 按原文引用，不要推广成所有 IdP 的标准错误串；#2924 测试期望里的 `OAuthError: Refresh token expired` 是该 PR 对 main 现状的描述，引用时注明出处；不要把本篇写成 OAuth 入门或再讲 Identity≠Audience；§4 `CONN-OAUTH-209` 是设计示例。P1。**Thu 2026-11-12 复核：PASS 保持 ready。** #1760/#2915/#4901 仍 open；#1813/#2757/#2924 仍 open 未合（#2924 于 2026-11-08 rebase，仍 `merged_at=null`）；#4911 draft closed 未合（closed 2026-11-01，`merged_at=null`）、#5037 closed 未合。
+
+### [parked] 2026-10-08 | P2 | mcp-sampling-server-controlled-prompt
 - **工作标题：** MCP Sampling：Server 借 Client 的模型说话
 - **失败面（MCP Client sampling 信任边界，非 tool description 投毒）：** Server 通过 `sampling/createMessage` 控制 prompt 和 `systemPrompt` 并消费补全 → 隐藏指令消耗配额 / 劫持后续对话 / 诱发隐蔽工具调用
-- **为何仍是 idea：** 目前只有 Unit 42 研究博文和第三方汇总，**缺 primary source**（advisory / fix commit / client issue）；需要找到真实 Client 实现在 sampling 审批 / 隔离上的缺陷再升 ready
+- **为何 parked：** 目前只有 Unit 42 研究博文和第三方汇总，**缺 primary source**（advisory / fix commit / client issue）；需要找到真实 Client 实现在 sampling 审批 / 隔离上的缺陷再升 ready
 - **专题归属：** 候选 MCP 协议信任边界（与 MCP-Auth 相邻）
 - **参考线索：**
   - https://unit42.paloaltonetworks.com/model-context-protocol-attack-vectors/ — 三类攻击向量（研究，非 primary）
-- **备注：** Scout 2026-10-08 留 idea；升级条件：≥1 条 Client 侧 advisory / issue + 修复对照。**Fri 2026-10-16 复查：仍不升 ready。** (1) 唯一新线索 rmcp（Rust SDK）≤3.0.1 接受未关联原始请求的 server→client 请求（含 `sampling/createMessage`），3.1.0 以 SEP-2260 修复——但目前只在 Aikido 的 pre-CVE 聚合页（AIKIDO-2026-617985，2026-08-03）看到，未找到仓库侧 advisory / PR，不算 primary；(2) MCP 规范页（2026-07-28 版）已写明 Sampling 自该版起 deprecated（SEP-2577），新实现不应采用——选题价值下降，倾向 park；(3) 同一轮发现的真 advisory（GHSA-345p-7cg4-v4c7，TS SDK 共享 server / transport 导致 sampling / elicitation 等 server→client 消息串到别的 client）已另立 ready `mcp-server-instance-reuse-cross-client-leak`，不复用本条。
+- **备注：** Scout 2026-10-08 留 idea；升级条件：≥1 条 Client 侧 advisory / issue + 修复对照。**Fri 2026-10-16 复查：仍不升 ready。** (1) 唯一新线索 rmcp（Rust SDK）≤3.0.1 接受未关联原始请求的 server→client 请求（含 `sampling/createMessage`），3.1.0 以 SEP-2260 修复——但目前只在 Aikido 的 pre-CVE 聚合页（AIKIDO-2026-617985，2026-08-03）看到，未找到仓库侧 advisory / PR，不算 primary；(2) MCP 规范页（2026-07-28 版）已写明 Sampling 自该版起 deprecated（SEP-2577），新实现不应采用——选题价值下降，倾向 park；(3) 同一轮发现的真 advisory（GHSA-345p-7cg4-v4c7，TS SDK 共享 server / transport 导致 sampling / elicitation 等 server→client 消息串到别的 client）已另立 ready `mcp-server-instance-reuse-cross-client-leak`，不复用本条。**Tue 2026-11-10 park：** 仍无 client 侧 advisory / issue + 修复对照可作为 primary；Sampling 在 2026-07-28 规范中仍为 deprecated（SEP-2577；新实现 SHOULD NOT 采用；最早移除不早于 2027-07-28）。不升 ready。
 
 ### [published] 2026-09-15 | P0 | trajectory-eval-false-green
 - **工作标题：** Trajectory Eval：答对了为什么还是假绿
@@ -769,3 +828,4 @@
 - 2026-11-02 Coordinator: Reviewer Approve → publish posts/tool_approval_cross_run_transfer.md (Agent Session-State Integrity #5); backlog tool-approval-cross-run-transfer → published. Ready left 1 (mcp-list-changed-reload-blocks-receive-loop).
 - 2026-11-06 Coordinator: Reviewer Approve → publish posts/mcp_list_changed_reload_blocks_receive_loop.md (Agent Runtime Failure Handling #4); backlog mcp-list-changed-reload-blocks-receive-loop → published. Ready left 2 (mcp-streamable-http-404-session-stuck, mcp-request-stream-id-key-collision).
 - 2026-11-11 Coordinator: Reviewer Approve → publish posts/mcp_streamable_http_404_session_stuck.md (Agent Runtime Failure Handling #5); backlog mcp-streamable-http-404-session-stuck → published. Ready left 1 (mcp-request-stream-id-key-collision).
+- 2026-11-12 Scout: Thu rebuild of #117 onto current main after session-404 published (merge #119, 3fcc81cd; do not merge main into old head). Keep published status. Align published session-404 backlog GOOD/§5/备注 with the post (MUST re-init ≠ conditional replay; vs published list-changed; #3799 `SessionNotFoundError` is a proposal). Fold #3807 into ready `mcp-request-stream-id-key-collision` (distinct from #3786); retarget 404 boundaries to vs published. Re-verify ready PASS: #3060/#3786/#3807/#2655/#3792/#2556/#1760/#2915/#4901 still open; #3793/#1813/#2757/#2924/#4911/#5037 unmerged; TS #2735 closed completed + #2886 merged `ef39308`. #2655 2026-11-11 comment reproduces same-id overwrite on main v2, not a fix. Park mcp-sampling-server-controlled-prompt (still no primary). Ready = 3; Writer order: mcp-request-stream-id-key-collision → mcp-list-pagination-cursor-not-drained → mcp-oauth-rotating-refresh-token-race.
