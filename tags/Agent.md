@@ -1,9 +1,10 @@
 # Posts Tagged With: #Agent
 
-Total: 25 posts
+Total: 26 posts
 
 ---
 
+- [2026-11-18] [MCP 响应流错投：str(id) 合并了整数、字符串与 GET 哨兵](../posts/mcp_request_stream_id_key_collision.md)
 - [2026-11-09] [服务端重启后一直 404：Streamable HTTP 会话失效，重试却还带着旧 session id](../posts/mcp_streamable_http_404_session_stuck.md)
 - [2026-11-06] [list_changed 一来就卡死：通知 handler 里 await list_tools，成功结果变成 "Error: Function failed."](../posts/mcp_list_changed_reload_blocks_receive_loop.md)
 - [2026-11-02] [上次点过同意，这次没问就执行了：审批记录只绑 call_id，不绑 run](../posts/tool_approval_cross_run_transfer.md)
@@ -20,14 +21,14 @@ Total: 25 posts
 - [2026-09-30] [工具策略「滤完了」：MCP/LSP 却在过滤之后才拼进来](../posts/host_tool_policy_merge_after_filter.md)
 - [2026-09-28] [静默截断：工具「成功返回」了半截，模型却自信答完](../posts/silent_tool_result_truncation.md)
 - [2026-09-23] [MCP Consent Binding：Consent 绿了，IdP callback 没绑到同意过的浏览器（Confused Deputy）](../posts/mcp_consent_binding_confused_deputy.md)
-- [2026-09-22] [MCP Auth：Identity ≠ Audience——OAuth 绿了，token 没绑到这台 MCP](../posts/mcp_auth_identity_not_intent.md)
 - [2026-09-22] [专员互相转交都「成功」：无终止谓词的 Handoff 环](../posts/multi_agent_closed_loop_handoff.md)
+- [2026-09-22] [MCP Auth：Identity ≠ Audience——OAuth 绿了，token 没绑到这台 MCP](../posts/mcp_auth_identity_not_intent.md)
 - [2026-09-21] [Agent 记得太久：Session Summarization 把间接注入写成跨会话「系统指令」](../posts/agent_memory_poisoning.md)
 - [2026-09-18] [长跑 Agent 挂了：Checkpoint 不等于 Durable Execution](../posts/durable_agent_execution.md)
 - [2026-09-17] [长程 Agent：第一个错 ≠ 决定性错误](../posts/long_horizon_decisive_error.md)
 - [2026-09-16] [Agent 写操作的幂等：超时之后凭什么敢重试](../posts/agent_write_idempotency.md)
-- [2026-09-15] [MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用](../posts/mcp_tool_design_valid_but_wrong.md)
 - [2026-09-15] [Trajectory Eval：答对了为什么还是假绿](../posts/trajectory_eval_false_green.md)
+- [2026-09-15] [MCP 工具设计：为什么 Agent 总发出「合法但错误」的调用](../posts/mcp_tool_design_valid_but_wrong.md)
 - [2017-08-07] [使用ssh-agent 管理多个ssh key](../posts/ssh-agent.md)
 
 ---
