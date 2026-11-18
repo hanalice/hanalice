@@ -28,7 +28,7 @@
 1. **有失败形态**：能写成「现象 → 误判 → 根因 → 修复」  
 2. **有机制可拆**：协议 / 运行时 / 评估至少一层说透  
 3. **有对照或清单**：坏 vs 好、V1→Vn、checklist 至少一种  
-4. **不与已发文重复**：查 `posts/` 与 `tags/`；同主题须推进到新失败面  
+4. **不与已发文或在审稿重复**：查 `posts/`、`tags/` 与 backlog 里的 `published` / `in_review`；同主题须推进到新失败面  
 
 不满足则标为 `rejected`，并写一句原因，供选题 Agent 学习。
 
@@ -38,8 +38,10 @@
 - **禁止**把「当前热门选题列表」写死在本规范正文；规范只定义门槛与格式  
 - 状态机：`idea` → `ready` → `writing` → `in_review` → `published` | `rejected` | `parked`  
 - 选题 Agent：**只负责**调研并追加/更新 backlog（可改优先级，不直接写 `posts/`）  
-- 写稿 Agent：只从状态为 `ready` 的条目取最高优先级一条，改为 `writing`  
-- 审阅 Agent：对照本文 §3–§7 与验收清单；**Approve = ship-ready**（不够深则 request changes，不软通过）；通过后 Coordinator **立即** push，不重等 Alice「批准 push」
+- 写稿 Agent：只从状态为 `ready`、且已通过 §6.1 开写确认的条目里取最高优先级一条，改为 `writing`  
+- **Ready ≥ 3 是库存目标，不是单篇写稿门槛。** 已有 `ready` 条目，只要 Scout 确认真实来源、机制深度、且不与已发文或 `in_review` 重复，就可以开写。不得仅因 Ready < 3 而 SKIP  
+- Ready < 3 **自动触发** Scout 补库，包括一篇发布之后的库存复查。补库不放宽 §2.1，也不把浅题硬升 `ready` 来凑数  
+- 审阅 Agent：对照本文 §3–§7 与验收清单；**Approve = ship-ready**（不够深则 request changes，不软通过）；通过后 Coordinator **立即**以普通 merge commit 发布，不重等 Alice「批准 push」
 
 ### 2.3 backlog 条目模板
 
@@ -126,15 +128,44 @@ description: 一两句说清失败面 + 结论（约 80～160 字，供卡片摘
 
 | 角色 | 职责 | 读写 |
 | --- | --- | --- |
-| **选题 Scout** | 调研 Agent 领域新坑；写入/更新 `docs/blog-backlog.md` | 读写 backlog；只读 `posts/` |
-| **写稿 Writer** | 取一条 `ready`；**按本文 §3 六段结构**写 `posts/*.md`（含强制 `description`）；本地成稿 | 读写 posts + backlog 状态 |
+| **选题 Scout** | 调研 Agent 领域新坑；写入/更新 `docs/blog-backlog.md`；只开 backlog-only PR | 读写 backlog；只读 `posts/`。不自合并、不发布、不写 `posts/` |
+| **写稿 Writer** | 取一条已确认的 `ready`；**按本文 §3 六段结构**写 `posts/*.md`（含强制 `description`）；本地成稿。库存不足不是 SKIP 理由 | 读写 posts + backlog 状态 |
 | **审阅 Reviewer** | 按 §7 验收；Approve = ship-ready；不够深则 request changes，不软通过 | 只读 posts；写 backlog 状态与审阅记录 |
-| **协调 Coordinator** | 排期、拉通 Scout→Writer→Reviewer；**Reviewer Approve 后立即 push**（不等 Alice「批准 push」）；更新 backlog→`published`；群里留题名 + commit/PR | 编排；推送；不代替三人写稿/审稿 |
+| **协调 Coordinator** | 排期、拉通 Scout→Writer→Reviewer；质检并自动合并通过的 backlog-only PR；**Reviewer Approve 后立即发布**（不等 Alice「批准 push」）；更新 backlog→`published`；核对站点并公告题名 + commit/PR | 编排；合并；不代替三人调研/写稿/审稿 |
 
-**节奏：** 自动写稿日 Mon/Wed/Fri（Asia/Shanghai）；周末留给 Alice **审已推送正文**，她可手工改再提交。  
+**节奏：** 自动写稿日 Mon/Wed/Fri（Asia/Shanghai）；周末留给 Alice **审已推送正文**，她可手工改再提交。Tue/Thu 轻量补库与 §6.1 的 Ready < 3 规则是同一条，不另设更松门槛。  
 **群聊：** 频道 `Blog Pipeline` = Scout + Writer + Reviewer + Coordinator。
 
-**发布硬规则：** Reviewer 未批准 → Coordinator 不得 push。Approve 之后 → **立即** push，不二次等人批准。
+### 6.1 库存与开写
+
+- **Ready ≥ 3** 只衡量 `ready` 库存够不够下一轮写稿，不决定这一篇能不能写。
+- 开写条件（三条都要有）：Scout 确认该条有**真实来源**、**机制深度**（过 §2.1），并且**不与已发文或 `in_review` 重复**。满足即可进入 Writer，即使当时 Ready < 3。
+- Ready < 3 时 Scout 必须补库。触发点包括写作日前库存已不足，以及**每篇发布之后**再数一次剩余 `ready`。Tue/Thu 轻量补库走同一条：只补过 §2.1 的题，不稀释质量，不把浅题硬塞进 `ready`。
+- 补不上不等于停写。已确认的 `ready` 照常开写；补库 PR 与当天的文章发布 PR 分开。
+
+### 6.2 backlog-only PR（Scout 补库）
+
+Scout 把选题改动做成 **backlog-only PR**，自己不合、不发布。
+
+Coordinator 合并前逐项质检。任一项失败：先修复、再审，通过前不合。
+
+1. **来源 / 版本 / 状态**与当前 issue、PR、advisory、规范原文一致  
+2. **深度**过 §2.1，不是概念清单或浅题凑数  
+3. **边界与去重**：对照 `published` 与 `in_review`，失败面不重复  
+4. **队列**：`ready` 条数与 Writer 顺序写得清，且与 diff 一致  
+5. **状态不回退**：`writing` / `in_review` / `published` 不得改回 `ready`。`mcp-streamable-http-404-session-stuck` 保持 `published`  
+6. **文件范围**：通常只允许 `docs/blog-backlog.md`。不得改 `posts/`，不得夹带无关编辑  
+7. **可合并**，且所需 CI / check 为通过
+
+通过后 Coordinator **自动**以普通 merge commit 合入，不就这一份 PR 再向 Alice 要合并确认。
+
+分支维护：diff 与上述状态已经对当前 `main` 核对干净时，不为无关的流量滚存反复 rebase。不得在未获必需确认时覆盖远端历史（force-push 或改写已推送提交）。
+
+### 6.3 文章发布
+
+文章发布门槛不变，详见 §8：必须有 Reviewer Approve；Coordinator 在 Approve 之后立即以普通 merge commit 发布，再核对 blog-sync / Pages / 站点并公告。backlog-only 的自动合并不代替这篇 Approve。
+
+**发布硬规则：** Reviewer 未批准 → Coordinator 不得发布文章。Approve 之后 → **立即**以普通 merge commit 发布，不二次等人批准。
 
 ---
 
@@ -151,16 +182,16 @@ description: 一两句说清失败面 + 结论（约 80～160 字，供卡片摘
 - [ ] 含可勾选发版清单（对准可注入失败点）  
 - [ ] 规范专名；引用可追溯  
 - [ ] 对应 backlog 条目已从 `ready` 推进  
-- [ ] Approve = ship-ready；通过后 Coordinator 立即 push  
+- [ ] Approve = ship-ready；通过后 Coordinator 立即以普通 merge commit 发布，并核对 blog-sync / Pages / 站点后公告  
 
 ---
 
 ## 8. 发布流程 (Publish)
 
 1. Writer 本地成稿于 WSL `/home/alice/workspace/homepage`（或流水线约定路径）  
-2. Reviewer 通过（Approve = ship-ready）  
-3. Coordinator **立即** commit/push 到 `hanalice/hanalice` `main`  
-4. `blog-sync` / Pages Action 更新站点；backlog 标 `published`  
+2. Reviewer 通过（Approve = ship-ready）。未 Approve 不得发布  
+3. Coordinator 在 Approve 之后**立即**以普通 merge commit 合入 `hanalice/hanalice` `main`（不等 Alice「批准 push」；不直推 `main`）  
+4. 核对 `blog-sync` / Pages / 站点已更新；backlog 标 `published`；群里公告题名 + commit/PR  
 5. Alice 周末等人审已发文；有问题再手工改提交  
 6. 不提交 `.cursor/`  
 
@@ -170,7 +201,7 @@ description: 一两句说清失败面 + 结论（约 80～160 字，供卡片摘
 
 | 文档 | 管什么 |
 | --- | --- |
-| 本文 | 写什么、怎么写、流水线、验收 |
+| 本文 | 写什么、怎么写、库存/补库、backlog-only 合并、发布与验收 |
 | `docs/blog-backlog.md` | **滚动选题**（持续变化） |
 | `github_profile_engineering.md` | 仓库/Actions/用语 §8 |
 | `posts/durable_agent_execution.md` | **结构标杆** |
