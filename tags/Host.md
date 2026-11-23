@@ -1,9 +1,10 @@
 # Posts Tagged With: #Host
 
-Total: 11 posts
+Total: 12 posts
 
 ---
 
+- [2026-11-20] [第一次 list 成功 ≠ 目录完整：nextCursor 没跟完，后页工具从未注册](../posts/mcp_list_pagination_cursor_not_drained.md)
 - [2026-11-06] [list_changed 一来就卡死：通知 handler 里 await list_tools，成功结果变成 "Error: Function failed."](../posts/mcp_list_changed_reload_blocks_receive_loop.md)
 - [2026-11-02] [上次点过同意，这次没问就执行了：审批记录只绑 call_id，不绑 run](../posts/tool_approval_cross_run_transfer.md)
 - [2026-10-26] [换了个模型，会话就 400 了：tool call id 在跨 provider 重放时被改写](../posts/tool_call_id_rewrite_cross_provider.md)
