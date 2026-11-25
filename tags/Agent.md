@@ -1,9 +1,10 @@
 # Posts Tagged With: #Agent
 
-Total: 27 posts
+Total: 28 posts
 
 ---
 
+- [2026-11-25] [两个 401 同时刷新：旋转 refresh token 的并发重用会让授权失效](../posts/mcp_oauth_rotating_refresh_token_race.md)
 - [2026-11-20] [第一次 list 成功 ≠ 目录完整：nextCursor 没跟完，后页工具从未注册](../posts/mcp_list_pagination_cursor_not_drained.md)
 - [2026-11-18] [MCP 响应流错投：str(id) 合并了整数、字符串与 GET 哨兵](../posts/mcp_request_stream_id_key_collision.md)
 - [2026-11-09] [服务端重启后一直 404：Streamable HTTP 会话失效，重试却还带着旧 session id](../posts/mcp_streamable_http_404_session_stuck.md)
