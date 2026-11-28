@@ -38,4 +38,4 @@
   <a href="./posts">All Posts →</a>
 </p>
 
-<!-- STATUS: HEALTHY, LAST_SYNC: 2026-11-27 09:38:15 -->
+<!-- STATUS: HEALTHY, LAST_SYNC: 2026-11-28 08:52:39 -->
